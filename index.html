@@ -23,7 +23,7 @@
     button:hover { background: #0056b3; }
     button:disabled { background: #555; cursor: not-allowed; }
 
-    /* エディタ（テキストボックス）周りのレイアウト */
+    /* エディタ周りのレイアウト */
     .editor-container { flex-basis: 100%; display: flex; flex-direction: column; gap: 5px; margin-top: 5px; }
     #codeEditor { width: 100%; height: 120px; padding: 10px; font-family: monospace; font-size: 13px; background: #111; color: #eee; border: 1px solid #555; border-radius: 4px; box-sizing: border-box; resize: vertical; }
     .save-controls { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 5px; }
@@ -78,7 +78,7 @@
   </div>
 
   <div id="viewer-container">
-    <iframe id="iframeA" class="viewer-frame"></iframe>
+    <iframe id="iframeA" class="viewer-frame" allow="xr-spatial-tracking; fullscreen; accelerometer; gyroscope; magnetometer; camera; microphone"></iframe>
     
     <div id="touchControls">
       <button id="btnUp" class="ctrl-btn">▲ 上昇</button>
@@ -87,32 +87,23 @@
   </div>
 
   <script>
-    // GASのURL
     const GAS_URL = "https://script.google.com/macros/s/AKfycbzj54N3di_L0kSqrqSo0M8XCWbboID34OB2FcPChr9ss1SPp5NRbMfDbKPH2PezsEhzcA/exec";
 
     let currentFileName = "";
-
-    // UI要素の取得
     const fileSelect = document.getElementById('fileSelect');
     const codeEditor = document.getElementById('codeEditor');
     const extSelect = document.getElementById('extSelect');
     const customExt = document.getElementById('customExt');
 
-    // メニューの開閉
     document.getElementById('menuToggle').addEventListener('click', () => {
       document.getElementById('toolbar').classList.toggle('hidden');
     });
 
-    // 拡張子プルダウンの切り替え（「手入力」を選んだらテキストボックスを表示）
     extSelect.addEventListener('change', (e) => {
-      if (e.target.value === 'manual') {
-        customExt.classList.remove('hidden');
-      } else {
-        customExt.classList.add('hidden');
-      }
+      if (e.target.value === 'manual') customExt.classList.remove('hidden');
+      else customExt.classList.add('hidden');
     });
 
-    // 起動時にファイルリストを取得
     async function fetchFileList() {
       try {
         const response = await fetch(GAS_URL);
@@ -131,21 +122,25 @@
           fileSelect.appendChild(option);
         });
       } catch (error) {
-        console.error("エラー:", error);
         fileSelect.innerHTML = '<option value="">読み込みエラー</option>';
       }
     }
 
-    // iframeにHTMLを描画する共通関数
+    // ★重要: iframeへの描画をBlob URL方式に変更★
     function renderToIframe(htmlCode) {
       const iframe = document.getElementById('iframeA');
-      const doc = iframe.contentWindow.document;
-      doc.open();
-      doc.write(htmlCode);
-      doc.close();
+      
+      // 前回のBlobURLが残っていればメモリから解放する
+      if (iframe.src && iframe.src.startsWith('blob:')) {
+        URL.revokeObjectURL(iframe.src);
+      }
+      
+      // HTML文字列を「text/html」型のBlob（擬似ファイル）に変換
+      const blob = new Blob([htmlCode], { type: 'text/html' });
+      // 生成したBlobのURLをiframeにセットして本物のファイルのように読み込ませる
+      iframe.src = URL.createObjectURL(blob);
     }
 
-    // 「▶ ドライブから表示」ボタン
     document.getElementById('btnPlay').addEventListener('click', async () => {
       const fileId = fileSelect.value;
       if (!fileId) return alert("ファイルを選択してください");
@@ -160,11 +155,8 @@
         const data = await response.json();
 
         if (data.success) {
-          // テキストボックスに取得したコードをセット
           codeEditor.value = data.html;
-          // iframeに表示
-          renderToIframe(data.html);
-
+          renderToIframe(data.html); // Blob URL方式でレンダリング
           document.getElementById('btnCopy').disabled = false;
           document.getElementById('btnOverwrite').disabled = false;
         } else {
@@ -178,13 +170,11 @@
       }
     });
 
-    // 「🔄 エディタのコードをプレビュー」ボタン
     document.getElementById('btnPreviewEditor').addEventListener('click', () => {
       if (!codeEditor.value) return alert("エディタにコードがありません");
-      renderToIframe(codeEditor.value);
+      renderToIframe(codeEditor.value); // Blob URL方式でレンダリング
     });
 
-    // 「📋 コピー」ボタン（テキストボックスの中身をコピー）
     document.getElementById('btnCopy').addEventListener('click', () => {
       if (!codeEditor.value) return;
       navigator.clipboard.writeText(codeEditor.value).then(() => {
@@ -192,43 +182,32 @@
       });
     });
 
-    // 「💾 上書き保存」ボタン
     document.getElementById('btnOverwrite').addEventListener('click', async () => {
       if (!codeEditor.value || !currentFileName) return;
       if (!confirm(`「${currentFileName}」をエディタの内容で上書き保存しますか？`)) return;
       await saveToDrive(currentFileName, codeEditor.value, "update");
     });
 
-    // 「📝 新規保存」ボタン
     document.getElementById('btnSaveAs').addEventListener('click', async () => {
       if (!codeEditor.value) return alert("保存する内容がエディタにありません");
       
-      // 元のファイル名から拡張子を抜いたものをデフォルトとして提案
       let baseNameSuggestion = currentFileName ? currentFileName.split('.')[0] : "new_scene";
       let baseName = prompt("新しいファイル名を入力してください。\n（※拡張子は自動で付与されます）", baseNameSuggestion);
       if (!baseName) return; 
 
-      // 拡張子の決定
       let ext = extSelect.value;
       if (ext === 'manual') {
         ext = customExt.value.trim();
         if (!ext) return alert("拡張子が入力されていません");
-        if (!ext.startsWith('.')) ext = '.' + ext; // ドット補完
+        if (!ext.startsWith('.')) ext = '.' + ext;
       }
 
-      // ユーザーが誤って拡張子を含めて入力した場合の除去処理
-      if (baseName.endsWith(ext)) {
-        baseName = baseName.slice(0, -ext.length);
-      }
-      
+      if (baseName.endsWith(ext)) baseName = baseName.slice(0, -ext.length);
       const finalFileName = baseName + ext;
       await saveToDrive(finalFileName, codeEditor.value, "create");
-      
-      // 保存完了後にリストを再取得
       fetchFileList();
     });
 
-    // GASへ保存リクエストを送る関数
     async function saveToDrive(fileName, content, action) {
       try {
         const payload = { action: action, fileName: fileName, content: content };
@@ -241,7 +220,7 @@
         const result = await response.json();
         if (result.success) {
           alert("保存成功: " + result.message);
-          currentFileName = fileName; // 上書き用にファイル名を更新
+          currentFileName = fileName; 
           document.getElementById('btnOverwrite').disabled = false;
         } else {
           alert("保存エラー: " + result.message);
@@ -251,11 +230,9 @@
       }
     }
 
-    // タッチコントロール（コンソール確認用）
     document.getElementById('btnUp').addEventListener('pointerdown', () => console.log("上昇"));
     document.getElementById('btnDown').addEventListener('pointerdown', () => console.log("下降"));
 
-    // 起動処理
     window.onload = fetchFileList;
   </script>
 </body>
