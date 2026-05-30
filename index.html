@@ -3,88 +3,195 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>3D HTML Viewer & AutoPlayer</title>
+  <title>3D HTML Player & AI Editor Pro</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: 'Segoe UI', sans-serif; display: flex; flex-direction: column; height: 100vh; background: #1a1a2e; color: #e0e0e0; overflow: hidden; }
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      display: flex; flex-direction: column; height: 100vh;
+      background: #1a1a2e; color: #e0e0e0; overflow: hidden;
+    }
 
-    /* ヘッダー＆ツールバー（前回同様） */
-    #header { padding: 8px 14px; background: #16213e; display: flex; align-items: center; gap: 10px; border-bottom: 1px solid #0f3460; flex-shrink: 0; }
-    #header h1 { font-size: 15px; color: #e94560; font-weight: 700; }
+    /* ヘッダー */
+    #header {
+      padding: 8px 14px; background: #16213e;
+      display: flex; align-items: center; gap: 10px;
+      border-bottom: 1px solid #0f3460; flex-shrink: 0;
+    }
+    #header h1 { font-size: 15px; color: #e94560; font-weight: 700; letter-spacing: 1px; }
     #menuToggle { background: #0f3460; color: #e0e0e0; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 13px; }
-    #toolbar { background: #16213e; padding: 10px 14px; border-bottom: 1px solid #0f3460; display: flex; flex-direction: column; gap: 8px; flex-shrink: 0; }
+    #menuToggle:hover { background: #e94560; }
+
+    /* ツールバー */
+    #toolbar {
+      background: #16213e; padding: 10px 14px; border-bottom: 1px solid #0f3460;
+      display: flex; flex-direction: column; gap: 8px; flex-shrink: 0; transition: all 0.3s;
+    }
     #toolbar.hidden { display: none; }
     .toolbar-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-    select, textarea { background: #0f3460; color: #e0e0e0; border: 1px solid #e9456055; padding: 6px 10px; border-radius: 4px; font-size: 13px; }
-    button { padding: 6px 12px; border: none; border-radius: 4px; cursor: pointer; font-size: 13px; font-weight: 600; }
-    .btn-primary { background: #e94560; color: #fff; } .btn-secondary { background: #0f3460; color: #e0e0e0; border: 1px solid #e9456055; }
-    .btn-fs { background: #6f42c1; color: #fff; } .btn-drive { background: #4285F4; color: #fff; }
+
+    select, input[type="text"], textarea {
+      background: #0f3460; color: #e0e0e0; border: 1px solid #e9456055;
+      padding: 6px 10px; border-radius: 4px; font-size: 13px;
+    }
+    select:focus, input[type="text"]:focus, textarea:focus { outline: none; border-color: #e94560; }
+
+    button { padding: 6px 12px; border: none; border-radius: 4px; cursor: pointer; font-size: 13px; font-weight: 600; transition: 0.15s; }
+    .btn-primary   { background: #e94560; color: #fff; }
+    .btn-secondary { background: #0f3460; color: #e0e0e0; border: 1px solid #e9456055; }
+    .btn-success   { background: #28a745; color: #fff; }
+    .btn-warning   { background: #ffc107; color: #000; }
+    .btn-danger    { background: #dc3545; color: #fff; }
+    .btn-info      { background: #17a2b8; color: #fff; }
+    .btn-drive     { background: #4285F4; color: #fff; } 
+    .btn-fs        { background: #6f42c1; color: #fff; } 
+    .btn-ai        { background: #8e44ad; color: #fff; width: 100%; padding: 8px; margin-top: 5px;} 
     
-    /* エディタエリア */
+    button:hover { opacity: 0.85; transform: translateY(-1px); }
+    button:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+
+    /* ファイルタブ */
+    #fileTabs {
+      display: flex; gap: 4px; flex-wrap: wrap; border-bottom: 1px solid #0f3460;
+      padding: 0 14px; background: #16213e; flex-shrink: 0; min-height: 34px; align-items: flex-end;
+    }
+    .file-tab {
+      padding: 5px 12px; border-radius: 4px 4px 0 0; background: #0f3460; color: #aaa;
+      cursor: pointer; font-size: 12px; border: 1px solid #0f3460; border-bottom: none;
+      display: flex; align-items: center; gap: 6px; user-select: none;
+    }
+    .file-tab.active { background: #1a1a2e; color: #e94560; border-color: #e94560; }
+    .file-tab .close-tab { color: #888; font-size: 14px; line-height: 1; cursor: pointer; padding: 0 2px; }
+    .file-tab .close-tab:hover { color: #e94560; }
+
+    /* メインエリア */
     #main { flex: 1; display: flex; overflow: hidden; }
-    #editor-panel { width: 40%; min-width: 250px; display: flex; flex-direction: column; border-right: 2px solid #e94560; resize: horizontal; overflow: auto; }
+
+    /* エディタパネル */
+    #editor-panel {
+      width: 40%; min-width: 250px; max-width: 70%; display: flex; flex-direction: column;
+      border-right: 2px solid #e94560; resize: horizontal; overflow: auto; position: relative;
+    }
     #editor-panel.hidden { display: none; }
-    #codeEditor { flex: 1; padding: 12px; font-family: 'Courier New', monospace; font-size: 13px; background: #0a0e1a; color: #e0e0e0; border: none; resize: none; outline: none; }
+    #editorLabel {
+      padding: 4px 10px; background: #0f3460; font-size: 11px; color: #aaa;
+      flex-shrink: 0; display: flex; justify-content: space-between; align-items: center;
+    }
+    #editorLabel span { color: #e94560; font-weight: 700; }
+    #codeEditor {
+      flex: 1; padding: 12px; font-family: 'Courier New', monospace; font-size: 13px;
+      background: #0a0e1a; color: #e0e0e0; border: none; resize: none; outline: none;
+      line-height: 1.6; white-space: pre; overflow: auto;
+    }
+
+    /* AIプロンプトエリア */
+    #ai-panel { padding: 10px; background: #16213e; border-top: 1px solid #e9456055; flex-shrink: 0; }
+    #aiPrompt { width: 100%; height: 60px; resize: vertical; margin-bottom: 5px; font-size: 12px; background: #0a0e1a; }
 
     /* ビューワーエリア（ダブルバッファリング用） */
     #viewer-container { flex: 1; position: relative; background: #000; overflow: hidden; }
     
     /* 2つのiframeを重ねる。非アクティブな方は透明にして裏で読み込ませる */
-    .viewer-frame { position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: none; opacity: 0; transition: opacity 0.8s ease-in-out; pointer-events: none; }
+    .viewer-frame { position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: none; opacity: 0; transition: opacity 0.8s ease-in-out; pointer-events: none; background: transparent; }
     .viewer-frame.active { opacity: 1; pointer-events: auto; z-index: 10; }
     
-    #viewer-placeholder { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: #555; z-index: 5; }
+    #viewer-placeholder { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #555; font-size: 14px; gap: 8px; z-index: 5; }
+    #viewer-placeholder .icon { font-size: 48px; }
 
     /* ★ フルスクリーン＆iPhone対応のオーバーレイUI ★ */
     #overlay-ui { position: absolute; inset: 0; pointer-events: none; z-index: 50; display: flex; flex-direction: column; justify-content: space-between; padding: 15px; }
     
-    /* 上部：ファイル名表示とオートプレイ状態 */
+    /* 上部：ファイル名表示 */
     .overlay-top { display: flex; justify-content: space-between; pointer-events: auto; }
-    .overlay-title { background: rgba(0,0,0,0.6); padding: 5px 15px; border-radius: 20px; font-size: 14px; backdrop-filter: blur(4px); }
+    .overlay-title { background: rgba(0,0,0,0.6); padding: 6px 16px; border-radius: 20px; font-size: 13px; backdrop-filter: blur(4px); border: 1px solid #e9456055; color: #fff; font-weight: bold; }
     
     /* 下部：コントロールボタン群 */
     .overlay-bottom { display: flex; justify-content: space-between; align-items: flex-end; pointer-events: auto; }
     .playback-controls { display: flex; gap: 10px; }
-    .overlay-btn { background: rgba(0,0,0,0.6); border: 1px solid #aaa; color: white; padding: 12px 18px; border-radius: 30px; font-size: 16px; backdrop-filter: blur(4px); transition: 0.2s; }
-    .overlay-btn:active { background: rgba(233, 69, 96, 0.8); }
-    .overlay-btn.active-mode { background: rgba(40, 167, 69, 0.8); border-color: #28a745; } /* オートプレイON時の色 */
+    .overlay-btn { background: rgba(0,0,0,0.6); border: 1px solid #e9456077; color: white; padding: 12px 18px; border-radius: 30px; font-size: 15px; font-weight: bold; backdrop-filter: blur(4px); transition: 0.2s; user-select: none; }
+    .overlay-btn:active { background: rgba(233, 69, 96, 0.8); transform: scale(0.95); }
+    .overlay-btn.active-mode { background: rgba(40, 167, 69, 0.85); border-color: #28a745; } 
 
     /* 右下：タッチカメラ操作 */
     .camera-controls { display: flex; flex-direction: column; gap: 10px; }
+
+    /* ステータスバー */
+    #statusBar {
+      padding: 3px 14px; background: #0f3460; font-size: 11px; color: #888;
+      flex-shrink: 0; display: flex; gap: 20px; align-items: center; justify-content: space-between;
+    }
+    #statusBar .status-ok { color: #28a745; }
+    #statusBar .status-err { color: #e94560; }
+    .hidden { display: none !important; }
   </style>
 </head>
 <body>
 
 <div id="header">
-  <h1>🎮 3D Viewer & AI Editor</h1>
+  <h1>🎮 3D Viewer &amp; AI Editor Pro</h1>
   <button id="menuToggle">☰ メニュー</button>
-  <button class="btn-secondary" id="btnToggleEditor">◧ エディタ</button>
+  <button class="btn-secondary" id="btnToggleEditor">◧ エディタ表示切替</button>
   <button class="btn-fs" id="btnFullscreen">⛶ フルスクリーン</button>
 </div>
 
 <div id="toolbar">
   <div class="toolbar-row">
+    <select id="sampleSelect">
+      <option value="">── サンプルを選択 ──</option>
+      <optgroup label="Three.js">
+        <option value="threejs_basic">Three.js: 回転キューブ</option>
+        <option value="threejs_particles">Three.js: パーティクル宇宙</option>
+      </optgroup>
+      <optgroup label="A-Frame">
+        <option value="aframe_scene">A-Frame: VRシーン</option>
+      </optgroup>
+    </select>
+    <button class="btn-primary" id="btnLoadSample">▶ ロード</button>
+    <button class="btn-info" id="btnPreview">🔄 プレビュー更新</button>
+    <button class="btn-secondary" id="btnCopy" disabled>📋 コピー</button>
+    <button class="btn-secondary" id="btnNewFile">＋ 空ファイル作成</button>
+    <button class="btn-success" id="btnSaveNew">📁 ローカル新規保存</button>
+    <button class="btn-secondary" id="btnOverwrite" disabled>💾 ローカル上書き</button>
+  </div>
+
+  <div class="toolbar-row" style="padding-top: 5px; border-top: 1px dashed #0f3460;">
     <button class="btn-drive" id="btnLoadDriveList">☁️ ドライブ読込</button>
-    <select id="driveFileSelect" style="flex:1;"><option value="">ドライブ未接続</option></select>
-    <button class="btn-primary" id="btnPlaySelected">▶ 選択して表示</button>
+    <select id="driveFileSelect" style="min-width: 200px;"><option value="">ドライブ未読込</option></select>
+    <button class="btn-drive" id="btnLoadDrive">☁️ ドライブから開く</button>
+    <button class="btn-drive" id="btnSaveDrive" disabled>☁️ ドライブへ保存</button>
   </div>
 </div>
 
+<div id="fileTabs"></div>
+
 <div id="main">
   <div id="editor-panel">
-    <textarea id="codeEditor" placeholder="現在表示中のコード（プレビュー・編集可能）"></textarea>
-    <button class="btn-secondary" id="btnPreview" style="margin:5px;">🔄 プレビュー更新</button>
+    <div id="editorLabel">
+      <span id="currentFileLabel">untitled.html</span>
+      <span id="charCount">0 文字</span>
+    </div>
+    <textarea id="codeEditor" placeholder="ここにHTMLコードを入力するか、サンプルをロードしてください...
+Three.js / A-Frame すべて対応しています。"></textarea>
+    
+    <div id="ai-panel">
+      <textarea id="aiPrompt" placeholder="【AIへの変更依頼】例: ライティングを夕暮れ風にして、中央のオブジェクトをゆっくり回転させて。"></textarea>
+      <button class="btn-ai" id="btnAiGenerate">✨ AIコード生成 / 変更実行</button>
+    </div>
   </div>
 
   <div id="viewer-container">
-    <div id="viewer-placeholder">ドライブからファイルを読み込んでください</div>
+    <div id="viewer-placeholder">
+      <div class="icon">🖥️</div>
+      <div>サンプルやドライブからロードするか</div>
+      <div>エディタに入力して「プレビュー更新」</div>
+    </div>
     
     <iframe id="iframeA" class="viewer-frame" allow="xr-spatial-tracking; fullscreen; accelerometer; gyroscope; magnetometer; camera; microphone"></iframe>
     <iframe id="iframeB" class="viewer-frame" allow="xr-spatial-tracking; fullscreen; accelerometer; gyroscope; magnetometer; camera; microphone"></iframe>
     
     <div id="overlay-ui">
       <div class="overlay-top">
-        <div id="osd-filename" class="overlay-title">---</div>
+        <div id="osd-filename" class="overlay-title">untitled.html</div>
       </div>
       <div class="overlay-bottom">
         <div class="playback-controls">
@@ -100,171 +207,296 @@
   </div>
 </div>
 
+<div id="statusBar">
+  <div>
+    <span id="statusMsg">準備完了</span> | 
+    <span id="fileCountMsg">ローカルファイル: 0</span>
+  </div>
+  <div id="driveStatus">GAS未通信</div>
+</div>
+
 <script>
 // =============================================
-//  設定と状態管理
+//  設定とグローバル状態管理
 // =============================================
 const GAS_URL = "https://script.google.com/macros/s/AKfycbzj54N3di_L0kSqrqSo0M8XCWbboID34OB2FcPChr9ss1SPp5NRbMfDbKPH2PezsEhzcA/exec";
+const STORAGE_KEY = 'viewer_files_v1';
 
-let driveFiles = [];        // ドライブのファイルリスト
-let currentIndex = -1;      // 現在再生中のインデックス
+let files = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+let activeFile = null;
+
+let driveFiles = [];        // GASから取得したファイルリスト
+let currentIndex = -1;      // 現在再生中のドライブ内インデックス
 let isAutoPlay = false;     // オートプレイ状態
-let autoPlayTimer = null;   // タイマーID
-const AUTOPLAY_INTERVAL = 15000; // 15秒で次のファイルへ
+let autoPlayTimer = null;   // タイマー
+const AUTOPLAY_INTERVAL = 15000; // オートプレイの間隔（15秒）
 
-let activeIframeId = 'iframeA'; // 現在表示しているiframe ('iframeA' or 'iframeB')
-
-// =============================================
-//  UIイベント（メニュー、フルスクリーン）
-// =============================================
-document.getElementById('menuToggle').addEventListener('click', () => document.getElementById('toolbar').classList.toggle('hidden'));
-document.getElementById('btnToggleEditor').addEventListener('click', () => document.getElementById('editor-panel').classList.toggle('hidden'));
-
-document.getElementById('btnFullscreen').addEventListener('click', () => {
-  const viewer = document.getElementById('viewer-container');
-  if (!document.fullscreenElement) viewer.requestFullscreen().catch(err => alert(`エラー: ${err.message}`));
-  else document.exitFullscreen();
-});
+let activeIframeId = 'iframeA'; // 表側で動いているiframe ID
 
 // =============================================
-//  GAS (Googleドライブ) 連携
+//  UIユーティリティ
 // =============================================
-document.getElementById('btnLoadDriveList').addEventListener('click', async () => {
-  const select = document.getElementById('driveFileSelect');
-  select.innerHTML = '<option value="">⏳ 読込中...</option>';
+function setStatus(msg, type = '') {
+  const el = document.getElementById('statusMsg');
+  el.textContent = msg; el.className = type;
+}
+
+function setDriveStatus(msg) {
+  document.getElementById('driveStatus').textContent = msg;
+}
+
+function updateCharCount() {
+  const len = document.getElementById('codeEditor').value.length;
+  document.getElementById('charCount').textContent = `${len.toLocaleString()} 文字`;
+}
+
+// =============================================
+//  ローカルファイル管理（タブシステム）
+// =============================================
+function saveStorage() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(files));
+  document.getElementById('fileCountMsg').textContent = `ローカルファイル: ${Object.keys(files).length}`;
+}
+
+function renderTabs() {
+  const container = document.getElementById('fileTabs');
+  container.innerHTML = '';
+  Object.keys(files).forEach(name => {
+    const tab = document.createElement('div');
+    tab.className = 'file-tab' + (name === activeFile ? ' active' : '');
+    tab.innerHTML = `<span>${name}</span><span class="close-tab" data-name="${name}">✕</span>`;
+    tab.querySelector('span:first-child').addEventListener('click', () => switchFile(name));
+    tab.querySelector('.close-tab').addEventListener('click', (e) => { e.stopPropagation(); deleteFile(name); });
+    container.appendChild(tab);
+  });
+  document.getElementById('fileCountMsg').textContent = `ローカルファイル: ${Object.keys(files).length}`;
+}
+
+function switchFile(name) {
+  if (activeFile && files[activeFile] !== undefined) {
+    files[activeFile] = document.getElementById('codeEditor').value;
+    saveStorage();
+  }
+  activeFile = name;
+  document.getElementById('codeEditor').value = files[name] || '';
+  document.getElementById('currentFileLabel').textContent = name;
+  document.getElementById('osd-filename').innerText = name; // OSD（画面上）のファイル名も連動
+  
+  // ボタン類の有効化制御
+  document.getElementById('btnOverwrite').disabled = false;
+  document.getElementById('btnSaveDrive').disabled = false;
+  document.getElementById('btnCopy').disabled = false;
+  
+  updateCharCount(); renderTabs(); setStatus(`「${name}」を開いています`);
+}
+
+function deleteFile(name) {
+  if (!confirm(`「${name}」をローカルから削除しますか？`)) return;
+  delete files[name]; saveStorage();
+  if (activeFile === name) {
+    activeFile = null;
+    document.getElementById('codeEditor').value = '';
+    document.getElementById('currentFileLabel').textContent = 'untitled.html';
+    document.getElementById('osd-filename').innerText = '---';
+    document.getElementById('btnOverwrite').disabled = true;
+    document.getElementById('btnSaveDrive').disabled = true;
+    document.getElementById('btnCopy').disabled = true;
+  }
+  renderTabs(); setStatus(`「${name}」を削除しました`);
+}
+
+function saveNewFile(name, content) {
+  files[name] = content; saveStorage(); renderTabs(); switchFile(name);
+}
+
+// =============================================
+//  ダブルバッファリング・クロスフェードレンダリング
+// =============================================
+function renderToIframe(html, customName = null) {
+  const labelName = customName || activeFile || "untitled.html";
+  document.getElementById('osd-filename').innerText = labelName;
+
+  // コントローラー信号（UP/DOWN）をキャッチして動かす共通レシーバーを注入
+  const injectionScript = `
+  <script>
+    window.addEventListener('message', (e) => {
+      const action = e.data.action;
+      const afCam = document.querySelector('a-camera, [camera]');
+      if (afCam && afCam.object3D) afCam.object3D.position.y += (action === 'moveUp' ? 0.5 : -0.5);
+      if (window.camera && window.camera.position) window.camera.position.y += (action === 'moveUp' ? 5 : -5);
+    });
+  <\/script></body>`;
+
+  const modifiedHtml = html.replace(/<\/body>/i, injectionScript);
+
+  // 裏側のiframeを選択
+  const nextIframeId = (activeIframeId === 'iframeA') ? 'iframeB' : 'iframeA';
+  const nextIframe = document.getElementById(nextIframeId);
+  const currentIframe = document.getElementById(activeIframeId);
+
+  if (nextIframe.src && nextIframe.src.startsWith('blob:')) {
+    URL.revokeObjectURL(nextIframe.src);
+  }
+
+  const blob = new Blob([modifiedHtml], { type: 'text/html' });
+  nextIframe.src = URL.createObjectURL(blob);
+
+  nextIframe.onload = () => {
+    document.getElementById('viewer-placeholder').classList.add('hidden');
+    nextIframe.classList.add('active');
+    currentIframe.classList.remove('active');
+    activeIframeId = nextIframeId; // アクティブ交代
+    setStatus('プレビューを更新しました（シームレス）', 'status-ok');
+  };
+}
+
+// =============================================
+//  GAS (Googleドライブ) 連携処理
+// =============================================
+async function fetchDriveFileList() {
+  const driveSelect = document.getElementById('driveFileSelect');
+  driveSelect.innerHTML = '<option value="">⏳ 取得中...</option>';
   try {
     const response = await fetch(GAS_URL);
     driveFiles = await response.json();
-    select.innerHTML = '';
+    driveSelect.innerHTML = ''; 
     if (driveFiles.length === 0) {
-      select.innerHTML = '<option value="">ファイルがありません</option>';
+      driveSelect.innerHTML = '<option value="">ドライブにファイルがありません</option>';
       return;
     }
-    driveFiles.forEach((file, index) => {
+    driveFiles.forEach((file, idx) => {
       const option = document.createElement('option');
-      option.value = index; // インデックスをValueにする
-      option.text = file.name;
-      select.appendChild(option);
+      option.value = idx; option.text = file.name;
+      driveSelect.appendChild(option);
     });
+    setDriveStatus('GAS同期完了');
   } catch (error) {
-    select.innerHTML = '<option value="">通信エラー</option>';
+    driveSelect.innerHTML = '<option value="">通信エラー</option>';
+    setDriveStatus('GAS通信エラー');
+  }
+}
+
+// ドライブから開く
+document.getElementById('btnLoadDrive').addEventListener('click', async () => {
+  const driveSelect = document.getElementById('driveFileSelect');
+  const index = parseInt(driveSelect.value, 10);
+  if (isNaN(index) || !driveFiles[index]) return alert("ドライブのファイルを選択してください");
+
+  const fileName = driveFiles[index].name;
+  const fileId = driveFiles[index].id;
+  const btn = document.getElementById('btnLoadDrive');
+  btn.innerText = "⏳ 読込中..."; btn.disabled = true;
+
+  try {
+    const response = await fetch(`${GAS_URL}?fileId=${fileId}`);
+    const data = await response.json();
+    if (data.success) {
+      currentIndex = index; // 現在地をマーク
+      saveNewFile(fileName, data.html); 
+      renderToIframe(data.html, fileName);
+      setStatus(`ドライブから「${fileName}」をロードしました`, 'status-ok');
+    } else {
+      alert("エラー: " + data.message);
+    }
+  } catch (error) {
+    alert("通信エラーが発生しました");
+  } finally {
+    btn.innerText = "☁️ ドライブから開く"; btn.disabled = false;
+  }
+});
+
+// ドライブへ保存
+document.getElementById('btnSaveDrive').addEventListener('click', async () => {
+  if (!activeFile) return alert("保存するファイルを開いてください");
+  const code = document.getElementById('codeEditor').value;
+  if (!code.trim()) return alert("コードがありません");
+
+  files[activeFile] = code; saveStorage();
+
+  const action = confirm(`Googleドライブ上の「${activeFile}」を上書き保存しますか？\n(キャンセルを押すと新しいファイルとして保存されます)`) ? "update" : "create";
+  
+  let saveName = activeFile;
+  if (action === "create") {
+    saveName = prompt("ドライブに保存する新しいファイル名", activeFile);
+    if (!saveName) return;
+    if (!saveName.endsWith('.html')) saveName += '.html';
+  }
+
+  const btn = document.getElementById('btnSaveDrive');
+  btn.innerText = "⏳ 保存中..."; btn.disabled = true;
+
+  try {
+    const payload = { action: action, fileName: saveName, content: code };
+    const response = await fetch(GAS_URL, { method: "POST", headers: { "Content-Type": "text/plain" }, body: JSON.stringify(payload) });
+    const result = await response.json();
+    if (result.success) {
+      alert("ドライブ保存成功: " + result.message);
+      if (action === "create") saveNewFile(saveName, code);
+      fetchDriveFileList(); // クラウド側リストの更新
+    } else {
+      alert("ドライブ保存エラー: " + result.message);
+    }
+  } catch (error) {
+    alert("保存通信エラー");
+  } finally {
+    btn.innerText = "☁️ ドライブへ保存"; btn.disabled = false;
   }
 });
 
 // =============================================
-//  シームレス切り替え（ダブルバッファリング）処理
+//  オートプレイ ＆ 次へ ロジック
 // =============================================
-
-// 指定したインデックスのファイルを裏側のiframeに読み込み、完了したら表に出す
-async function loadAndCrossfade(index) {
-  if (index < 0 || index >= driveFiles.length) return;
+async function playIndexFile(index) {
+  if (driveFiles.length === 0 || !driveFiles[index]) return;
   
-  // OSD（画面上部）にファイル名を表示
   document.getElementById('osd-filename').innerText = `⏳ 読込中: ${driveFiles[index].name}`;
   
   try {
-    // 1. GASからコードを取得
     const fileId = driveFiles[index].id;
+    const name = driveFiles[index].name;
     const response = await fetch(`${GAS_URL}?fileId=${fileId}`);
     const data = await response.json();
     
     if (data.success) {
-      // 2. コントローラー用スクリプトを注入
-      const injectionScript = `
-      <script>
-        window.addEventListener('message', (e) => {
-          const action = e.data.action;
-          const afCam = document.querySelector('a-camera, [camera]');
-          if (afCam && afCam.object3D) afCam.object3D.position.y += (action === 'moveUp' ? 0.5 : -0.5);
-          if (window.camera && window.camera.position) window.camera.position.y += (action === 'moveUp' ? 5 : -5);
-        });
-      <\/script></body>`;
-      const htmlCode = data.html.replace(/<\/body>/i, injectionScript);
+      currentIndex = index;
+      document.getElementById('driveFileSelect').value = index;
       
-      // エディタにも反映
-      document.getElementById('codeEditor').value = data.html;
-      
-      // 3. 次に使う（現在裏側にいる）iframeを決定
-      const nextIframeId = (activeIframeId === 'iframeA') ? 'iframeB' : 'iframeA';
-      const nextIframe = document.getElementById(nextIframeId);
-      const currentIframe = document.getElementById(activeIframeId);
-
-      // 古いBlobURLがあれば解放
-      if (nextIframe.src && nextIframe.src.startsWith('blob:')) {
-        URL.revokeObjectURL(nextIframe.src);
-      }
-
-      // 4. 裏側のiframeにBlobとして流し込む
-      const blob = new Blob([htmlCode], { type: 'text/html' });
-      nextIframe.src = URL.createObjectURL(blob);
-      
-      // 5. 読み込み完了を待ってからクロスフェード（フェードイン/アウト）
-      nextIframe.onload = () => {
-        document.getElementById('viewer-placeholder').classList.add('hidden');
-        document.getElementById('osd-filename').innerText = driveFiles[index].name; // 完了
-        
-        // CSSクラスを切り替えてフェード
-        nextIframe.classList.add('active');
-        currentIframe.classList.remove('active');
-        
-        // アクティブなIDを更新
-        activeIframeId = nextIframeId;
-        currentIndex = index; // 現在地を更新
-        document.getElementById('driveFileSelect').value = index; // セレクトボックスも連動
-      };
-      
+      // エディタとローカルストレージにも同期
+      saveNewFile(name, data.html);
+      // ダブルバッファで描画
+      renderToIframe(data.html, name);
     }
-  } catch (err) {
-    console.error("読込エラー", err);
+  } catch (e) {
     document.getElementById('osd-filename').innerText = "❌ 読込エラー";
   }
 }
 
-// ツールバーの「選択して表示」ボタン
-document.getElementById('btnPlaySelected').addEventListener('click', () => {
-  const select = document.getElementById('driveFileSelect');
-  const index = parseInt(select.value, 10);
-  if (!isNaN(index)) loadAndCrossfade(index);
-});
-
-// エディタのプレビュー更新（現在アクティブなiframeに直接上書き）
-document.getElementById('btnPreview').addEventListener('click', () => {
-  const code = document.getElementById('codeEditor').value;
-  const currentIframe = document.getElementById(activeIframeId);
-  const blob = new Blob([code], { type: 'text/html' });
-  currentIframe.src = URL.createObjectURL(blob);
-});
-
-// =============================================
-//  オーバーレイUI（次へ / オートプレイ）
-// =============================================
-
 function playNextFile() {
   if (driveFiles.length === 0) return;
   let nextIndex = currentIndex + 1;
-  if (nextIndex >= driveFiles.length) nextIndex = 0; // 最後まで行ったらループ
-  loadAndCrossfade(nextIndex);
+  if (nextIndex >= driveFiles.length) nextIndex = 0; // ループ
+  playIndexFile(nextIndex);
 }
 
-// 「⏭ 次へ」ボタン
+// ⏭ 次へ ボタン
 document.getElementById('btnNext').addEventListener('click', () => {
   playNextFile();
-  // 手動で次へを押したときはタイマーをリセット
   if (isAutoPlay) {
     clearInterval(autoPlayTimer);
     autoPlayTimer = setInterval(playNextFile, AUTOPLAY_INTERVAL);
   }
 });
 
-// 「🔄 オートプレイ」ボタン
+// 🔄 オートプレイ ボタン
 document.getElementById('btnAutoPlay').addEventListener('click', (e) => {
+  if (driveFiles.length === 0) return alert("先に『☁️ ドライブ読込』を行ってください。");
   isAutoPlay = !isAutoPlay;
   const btn = e.target;
   
   if (isAutoPlay) {
     btn.classList.add('active-mode');
     btn.innerText = "🔄 オートプレイ中";
-    // 15秒ごとにプレイ
+    playNextFile(); // 即座に次を実行
     autoPlayTimer = setInterval(playNextFile, AUTOPLAY_INTERVAL);
   } else {
     btn.classList.remove('active-mode');
@@ -274,15 +506,105 @@ document.getElementById('btnAutoPlay').addEventListener('click', (e) => {
 });
 
 // =============================================
-//  タッチカメラ操作
+//  【復旧】各種UI操作イベント処理
 // =============================================
+document.getElementById('menuToggle').addEventListener('click', () => document.getElementById('toolbar').classList.toggle('hidden'));
+document.getElementById('btnToggleEditor').addEventListener('click', () => document.getElementById('editor-panel').classList.toggle('hidden'));
+
+// フルスクリーン
+document.getElementById('btnFullscreen').addEventListener('click', () => {
+  const viewer = document.getElementById('viewer-container');
+  if (!document.fullscreenElement) viewer.requestFullscreen().catch(err => alert(`エラー: ${err.message}`));
+  else document.exitFullscreen();
+});
+
+// 📋 コピー ボタン
+document.getElementById('btnCopy').addEventListener('click', () => {
+  const code = document.getElementById('codeEditor').value;
+  if (!code) return;
+  navigator.clipboard.writeText(code).then(() => {
+    alert("コードをクリップボードにコピーしました！");
+  }).catch(err => alert("コピー失敗: " + err));
+});
+
+// 🔄 プレビュー更新 ボタン
+document.getElementById('btnPreview').addEventListener('click', () => {
+  const code = document.getElementById('codeEditor').value;
+  if (!code.trim()) return setStatus('コードがありません', 'status-err');
+  if (activeFile) { files[activeFile] = code; saveStorage(); }
+  renderToIframe(code);
+});
+
+// ＋ 空ファイル作成
+document.getElementById('btnNewFile').addEventListener('click', () => {
+  let name = prompt('新しいファイル名を入力', 'new_scene.html');
+  if (!name) return;
+  if (!name.endsWith('.html')) name += '.html';
+  saveNewFile(name, '<!DOCTYPE html>\n<html><head><meta charset="UTF-8"></head><body>\n\n</body></html>');
+});
+
+// 📁 ローカル新規保存
+document.getElementById('btnSaveNew').addEventListener('click', () => {
+  const code = document.getElementById('codeEditor').value;
+  if (!code.trim()) return setStatus('保存するコードがありません', 'status-err');
+  let name = prompt('ローカルストレージに保存する名前を入力', 'my_scene.html');
+  if (!name) return;
+  if (!name.endsWith('.html')) name += '.html';
+  saveNewFile(name, code);
+});
+
+// 💾 ローカル上書き
+document.getElementById('btnOverwrite').addEventListener('click', () => {
+  if (!activeFile) return;
+  files[activeFile] = document.getElementById('codeEditor').value;
+  saveStorage();
+  setStatus(`「${activeFile}」をローカルに上書き保存しました`, 'status-ok');
+});
+
+// ✨ AI変更依頼（プロンプトフック）
+document.getElementById('btnAiGenerate').addEventListener('click', async () => {
+  const promptText = document.getElementById('aiPrompt').value;
+  if (!promptText.trim()) return alert("AIへの変更指示を入力してください。");
+  
+  // 今後ここへGAS経由のGeminiAPI呼び出しや、API通信を拡張可能
+  alert(`【AI実装用フック】\n指示内容: ${promptText}\n\nここにAPI通信ロジックを統合します。現段階ではインターフェースの復旧を完了しています。`);
+});
+
+// コントローラー通信用
 function sendCameraCommand(action) {
   const iframe = document.getElementById(activeIframeId);
-  if (iframe.contentWindow) iframe.contentWindow.postMessage({ action: action }, '*');
+  if (iframe && iframe.contentWindow) iframe.contentWindow.postMessage({ action: action }, '*');
 }
 document.getElementById('btnUp').addEventListener('pointerdown', () => sendCameraCommand('moveUp'));
 document.getElementById('btnDown').addEventListener('pointerdown', () => sendCameraCommand('moveDown'));
+document.getElementById('btnLoadDriveList').addEventListener('click', fetchDriveFileList);
 
+// =============================================
+//  サンプルコード集
+// =============================================
+const SAMPLES = {
+  threejs_basic: `<!DOCTYPE html><html><head><style>body{margin:0;background:#000;overflow:hidden;}</style></head><body><script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"><\/script><script>const scene = new THREE.Scene(); const camera = new THREE.PerspectiveCamera(75, innerWidth/innerHeight, 0.1, 1000); window.camera = camera; const renderer = new THREE.WebGLRenderer({antialias:true}); renderer.setSize(innerWidth, innerHeight); document.body.appendChild(renderer.domElement); const geo = new THREE.BoxGeometry(); const mat = new THREE.MeshBasicMaterial({color: 0x00ff00, wireframe: true}); const cube = new THREE.Mesh(geo, mat); scene.add(cube); camera.position.z = 5; function animate() { requestAnimationFrame(animate); cube.rotation.x += 0.01; cube.rotation.y += 0.01; renderer.render(scene, camera); } animate();<\/script></body></html>`,
+  threejs_particles: `<!DOCTYPE html><html><head><style>body{margin:0;background:#050510;overflow:hidden;}</style></head><body><script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"><\/script><script>const scene = new THREE.Scene(); const camera = new THREE.PerspectiveCamera(60, innerWidth/innerHeight, 0.1, 1000); camera.position.z = 40; window.camera = camera; const renderer = new THREE.WebGLRenderer(); renderer.setSize(innerWidth, innerHeight); document.body.appendChild(renderer.domElement); const count = 2000; const geo = new THREE.BufferGeometry(); const pos = new Float32Array(count * 3); for(let i=0; i<count*3; i++) pos[i] = (Math.random()-0.5)*100; geo.setAttribute('position', new THREE.BufferAttribute(pos, 3)); const mat = new THREE.PointsMaterial({size: 0.5, color: 0x00ffff}); scene.add(new THREE.Points(geo, mat)); function animate() { requestAnimationFrame(animate); scene.rotation.y += 0.002; renderer.render(scene, camera); } animate();<\/script></body></html>`,
+  aframe_scene: `<!DOCTYPE html><html><head><script src="https://aframe.io/releases/1.4.0/aframe.min.js"><\/script></head><body><a-scene><a-box position="-1 0.5 -3" rotation="0 45 0" color="#4CC3D9"></a-box><a-sphere position="0 1.25 -5" radius="1.25" color="#EF2D5E"></a-sphere><a-cylinder position="1 0.75 -3" radius="0.5" height="1.5" color="#FFC65D"></a-cylinder><a-plane position="0 0 -4" rotation="-90 0 0" width="4" height="4" color="#7BC8A4"></a-plane><a-sky color="#ECECEC"></a-sky></a-scene></body></html>`
+};
+
+document.getElementById('btnLoadSample').addEventListener('click', () => {
+  const key = document.getElementById('sampleSelect').value;
+  if (!key || !SAMPLES[key]) return setStatus('サンプルを選択してください', 'status-err');
+  const name = document.getElementById('sampleSelect').options[document.getElementById('sampleSelect').selectedIndex].text + '.html';
+  saveNewFile(name, SAMPLES[key]);
+  renderToIframe(SAMPLES[key]);
+});
+
+document.getElementById('codeEditor').addEventListener('input', updateCharCount);
+
+// =============================================
+//  初期化処理
+// =============================================
+renderTabs();
+updateCharCount();
+// 起動時に自動でGASからファイル一覧を取りにいく
+fetchDriveFileList();
 </script>
 </body>
 </html>
