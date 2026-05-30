@@ -14,7 +14,7 @@
       background: #1a1a2e; color: #e0e0e0; overflow: hidden;
     }
 
-    /* 🍏 文字選択・長押しメニュー・ダブルタップズームを完全に防止（バグ修正） */
+    /* 🍏 文字選択・長押しメニュー・ダブルタップズームを完全に防止 */
     .overlay-btn, .ctrl-btn, #overlay-ui, .file-tab, button, select, #touchControls, .move-controls {
       -webkit-user-select: none;
       -moz-user-select: none;
@@ -73,14 +73,14 @@
     /* オーバーレイUI */
     #overlay-ui { position: absolute; inset: 0; pointer-events: none; z-index: 50; display: flex; flex-direction: column; justify-content: space-between; padding: 15px; }
     
-    /* 上部：タイトルバーと表示切り替えボタン（新規追加） */
+    /* 上部：タイトルバーと表示切り替えボタン */
     .overlay-top { display: flex; align-items: center; gap: 8px; pointer-events: auto; }
     .overlay-title { background: rgba(0,0,0,0.6); padding: 6px 16px; border-radius: 20px; font-size: 13px; border: 1px solid #e9456055; color: #fff; font-weight: bold; transition: opacity 0.3s; }
     
     /* 下部：コントロールエリア */
     .overlay-bottom { display: flex; justify-content: space-between; align-items: flex-end; pointer-events: auto; width: 100%; }
     
-    /* 左下：再生系 ＋ 空間移動十字キー（大幅拡張） */
+    /* 左下：再生系 ＋ 空間移動十字キー */
     .overlay-left-controls { display: flex; flex-direction: column; gap: 12px; }
     .playback-controls { display: flex; gap: 10px; }
     
@@ -179,25 +179,20 @@
     <iframe id="iframeA" class="viewer-frame" allow="xr-spatial-tracking; fullscreen; accelerometer; gyroscope; magnetometer; camera; microphone"></iframe>
     <iframe id="iframeB" class="viewer-frame" allow="xr-spatial-tracking; fullscreen; accelerometer; gyroscope; magnetometer; camera; microphone"></iframe>
     
-    <!-- オーバーレイUI -->
     <div id="overlay-ui">
-      <!-- 上部：タイトルと表示切替トグル（新規追加） -->
       <div class="overlay-top">
         <div id="osd-filename" class="overlay-title">untitled.html</div>
         <button id="btnToggleTitle" class="overlay-btn" style="padding: 6px 12px; border-radius: 20px; font-size:12px;">👁️</button>
       </div>
       
-      <!-- 下部：フルコントローラーエリア -->
       <div class="overlay-bottom">
         
-        <!-- 左下：再生制御 ＆ 空間自由移動十字キー -->
         <div class="overlay-left-controls">
           <div class="playback-controls">
             <button id="btnAutoPlay" class="overlay-btn">🔄 オートプレイ</button>
             <button id="btnNext" class="overlay-btn">⏭ 次へ</button>
           </div>
           
-          <!-- 🎮 前後左右 自由移動コントローラー -->
           <div class="move-controls">
             <div></div>
             <button id="btnForward" class="overlay-btn move-btn">▲</button>
@@ -210,7 +205,6 @@
           </div>
         </div>
         
-        <!-- 右下：垂直カメラ上下コントローラー -->
         <div class="camera-controls">
           <button id="btnUp" class="overlay-btn" style="border-radius: 20px 20px 8px 8px; height: 55px;">▲ 上昇</button>
           <button id="btnDown" class="overlay-btn" style="border-radius: 8px 8px 20px 20px; height: 55px;">▼ 下降</button>
@@ -299,18 +293,18 @@ function deleteFile(name) {
 function saveNewFile(name, content) { files[name] = content; saveStorage(); renderTabs(); switchFile(name); }
 
 // =============================================
-//  ダブルバッファ レンダリング (移動コマンド注入の拡張)
+//  ダブルバッファ レンダリング (移動コマンド注入)
 // =============================================
 function renderToIframe(html, customName = null) {
   document.getElementById('osd-filename').innerText = customName || activeFile || "untitled.html";
   
-  // ★重要：Three.js, A-Frame, Babylon.js の全移動に対応する高機能レシーバーの注入★
+  // ★ Three.js, A-Frame, Babylon.js の全移動に対応する高機能レシーバー ★
   const injectionScript = `
   <script>
     window.addEventListener('message', (e) => {
       const action = e.data.action;
       
-      // 1. A-Frame対応 (カメラローカル座標系移動)
+      // 1. A-Frame対応
       const afCam = document.querySelector('a-camera, [camera]');
       if (afCam && afCam.object3D) {
         const obj = afCam.object3D;
@@ -324,7 +318,7 @@ function renderToIframe(html, customName = null) {
         return;
       }
       
-      // 2. Three.js対応 (グローバル変数 window.camera に連動)
+      // 2. Three.js対応
       if (window.camera && window.camera.position) {
         const cam = window.camera;
         const dist = 1.8;
@@ -337,7 +331,7 @@ function renderToIframe(html, customName = null) {
         return;
       }
 
-      // 3. Babylon.js対応 (自動インスタンス・アクティブカメラ検出)
+      // 3. Babylon.js対応
       if (window.BABYLON) {
         try {
           const instances = window.BABYLON.Engine.Instances;
@@ -346,7 +340,6 @@ function renderToIframe(html, customName = null) {
             const cam = scene.activeCamera;
             const dist = 0.6;
             
-            // UniversalCamera / FreeCamera 系
             if (cam.getDirection) {
               if (action === 'moveUp') cam.position.y += dist;
               if (action === 'moveDown') cam.position.y -= dist;
@@ -356,13 +349,11 @@ function renderToIframe(html, customName = null) {
               if (action === 'moveBackward') cam.position.addInPlace(forward.scale(-dist));
               if (action === 'moveLeft') cam.position.addInPlace(right.scale(-dist));
               if (action === 'moveRight') cam.position.addInPlace(right.scale(dist));
-            } 
-            // ArcRotateCamera 系 (ターゲットおよびポジションのスライド移動)
-            else if (cam.target) {
+            } else if (cam.target) {
               if (action === 'moveUp') cam.target.y += dist;
               if (action === 'moveDown') cam.target.y -= dist;
               const diff = cam.target.subtract(cam.position);
-              diff.y = 0; // 水平ベクトル化
+              diff.y = 0; 
               const forward = diff.normalize();
               const right = window.BABYLON.Vector3.Cross(forward, cam.upVector || new window.BABYLON.Vector3(0,1,0)).normalize();
               if (action === 'moveForward') { cam.target.addInPlace(forward.scale(dist)); cam.position.addInPlace(forward.scale(dist)); }
@@ -392,7 +383,7 @@ function renderToIframe(html, customName = null) {
 }
 
 // =============================================
-//  タイトルの表示・非表示切り替え（新規追加）
+//  タイトルの表示・非表示切り替え
 // =============================================
 document.getElementById('btnToggleTitle').addEventListener('click', () => {
   const titleEl = document.getElementById('osd-filename');
@@ -432,8 +423,7 @@ document.getElementById('btnFullscreen').addEventListener('click', () => {
 // =============================================
 document.getElementById('btnApiKey').addEventListener('click', () => {
   const currentKey = localStorage.getItem(API_KEY_STORAGE) || "";
-  const newKey = prompt("Gemini APIキーを入力してください。
-※ブラウザに安全に保存されます。", currentKey);
+  const newKey = prompt("Gemini APIキーを入力してください。\n※ブラウザに安全に保存されます。", currentKey);
   if (newKey !== null) { localStorage.setItem(API_KEY_STORAGE, newKey.trim()); setStatus("APIキーを保存しました", "status-ok"); }
 });
 
@@ -450,13 +440,7 @@ document.getElementById('btnAiGenerate').addEventListener('click', async () => {
   try {
     const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent?key=${apiKey}`;
     const payload = {
-      contents: [{ role: "user", parts: [{ text: `以下の3Dコードを変更指示に従って完全に改修してください。
-
-【指示】
-${promptText}
-
-【現在のコード】
-${currentCode}` }] }],
+      contents: [{ role: "user", parts: [{ text: `以下の3Dコードを変更指示に従って完全に改修してください。\n\n【指示】\n${promptText}\n\n【現在のコード】\n${currentCode}` }] }],
       systemInstruction: { parts: [{ text: "あなたは世界最高峰のWeb3Dプログラマーです。修正要求を満たした【HTMLコード全体】のみを返してください。不要な解説や\`\`\`htmlのようなマークダウン装飾は一切省いて出力してください。" }] },
       generationConfig: { temperature: 0.2 }
     };
@@ -464,9 +448,7 @@ ${currentCode}` }] }],
     if (!res.ok) throw new Error("APIエラー");
     const data = await res.json();
     let newCode = data.candidates[0].content.parts[0].text;
-    newCode = newCode.replace(/^```(html)?
-?/, '').replace(/
-?```$/, '').trim();
+    newCode = newCode.replace(/^```(html)?\n?/, '').replace(/\n?```$/, '').trim();
 
     document.getElementById('codeEditor').value = newCode;
     if (activeFile) { files[activeFile] = newCode; saveStorage(); }
@@ -484,11 +466,10 @@ function sendCam(action) {
   }
 }
 
-// 押しっぱなしを検知してループ実行する処理
 function startMoving(action) {
   if (moveTimers[action]) return;
-  sendCam(action); // 初回実行
-  moveTimers[action] = setInterval(() => sendCam(action), 40); // 40ms間隔でスムーズ移動
+  sendCam(action); 
+  moveTimers[action] = setInterval(() => sendCam(action), 40); 
 }
 
 function stopMoving(action) {
@@ -498,7 +479,6 @@ function stopMoving(action) {
   }
 }
 
-// コントローラーボタンのバインド定義
 const controlMapping = [
   { id: 'btnUp', action: 'moveUp' },
   { id: 'btnDown', action: 'moveDown' },
@@ -511,11 +491,7 @@ const controlMapping = [
 controlMapping.forEach(mapping => {
   const el = document.getElementById(mapping.id);
   if (el) {
-    // タッチ＆マウス両対応ポインターイベント
-    el.addEventListener('pointerdown', (e) => {
-      e.preventDefault();
-      startMoving(mapping.action);
-    });
+    el.addEventListener('pointerdown', (e) => { e.preventDefault(); startMoving(mapping.action); });
     el.addEventListener('pointerup', () => stopMoving(mapping.action));
     el.addEventListener('pointerleave', () => stopMoving(mapping.action));
   }
@@ -572,14 +548,13 @@ document.getElementById('menuToggle').addEventListener('click', () => document.g
 document.getElementById('btnToggleEditor').addEventListener('click', () => document.getElementById('editor-panel').classList.toggle('hidden'));
 document.getElementById('btnCopy').addEventListener('click', () => navigator.clipboard.writeText(document.getElementById('codeEditor').value).then(() => alert("コピーしました")));
 document.getElementById('btnPreview').addEventListener('click', () => { const code = document.getElementById('codeEditor').value; if(activeFile){ files[activeFile] = code; saveStorage(); } renderToIframe(code); });
-document.getElementById('btnNewFile').addEventListener('click', () => { let n = prompt('ファイル名', 'new.html'); if(n){ if(!n.endsWith('.html')) n+='.html'; saveNewFile(n, '<!DOCTYPE html>
-<html><body></body></html>'); }});
+document.getElementById('btnNewFile').addEventListener('click', () => { let n = prompt('ファイル名', 'new.html'); if(n){ if(!n.endsWith('.html')) n+='.html'; saveNewFile(n, '<!DOCTYPE html>\n<html><body></body></html>'); }});
 document.getElementById('btnSaveNew').addEventListener('click', () => { let n = prompt('ファイル名', 'my.html'); if(n){ if(!n.endsWith('.html')) n+='.html'; saveNewFile(n, document.getElementById('codeEditor').value); }});
 document.getElementById('btnOverwrite').addEventListener('click', () => { files[activeFile] = document.getElementById('codeEditor').value; saveStorage(); setStatus("上書き完了", "status-ok"); });
 
 const SAMPLES = {
   threejs_basic: `<!DOCTYPE html><html><head><style>body{margin:0;background:#000;overflow:hidden;}</style></head><body><script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"><\/script><script>const scene = new THREE.Scene(); const camera = new THREE.PerspectiveCamera(75, innerWidth/innerHeight, 0.1, 1000); window.camera = camera; const renderer = new THREE.WebGLRenderer({antialias:true}); renderer.setSize(innerWidth, innerHeight); document.body.appendChild(renderer.domElement); const geo = new THREE.BoxGeometry(); const mat = new THREE.MeshBasicMaterial({color: 0x00ff00, wireframe: true}); const cube = new THREE.Mesh(geo, mat); scene.add(cube); camera.position.z = 5; function animate() { requestAnimationFrame(animate); cube.rotation.x += 0.01; cube.rotation.y += 0.01; renderer.render(scene, camera); } animate();<\/script></body></html>`,
-  aframe_scene: `<!DOCTYPE html><html><head><script src="https://aframe.io/releases/1.4.0/aframe.min.js"><\/script></head><body><a-scene><a-box position="-1 0.5 -3" rotation="0 45 0" color="#4CC3D9"></a-box><a-sphere position="0 1.25 -5" radius="1.25" color="#EF2D5E"></a-sphere><a-plane position="0 0 -4" rotation="-90 0 0" width="4" height="4" color="#7BC8A4"></a-plane><a-sky color="#ECECEC"></a-sky></a-scene></body></html>`
+  aframe_scene: `<!DOCTYPE html><html><head><script src="https://aframe.io/releases/1.4.0/aframe.min.js"><\/script></head><body><a-scene><a-box position="-1 0.5 -3" rotation="0 45 0" color="#4CC3D9"></a-box><a-sphere position="0 1.25 -5" radius="1.25" color="#EF2D5E"></a-sphere><a-cylinder position="1 0.75 -3" radius="0.5" height="1.5" color="#FFC65D"></a-cylinder><a-plane position="0 0 -4" rotation="-90 0 0" width="4" height="4" color="#7BC8A4"></a-plane><a-sky color="#ECECEC"></a-sky></a-scene></body></html>`
 };
 document.getElementById('btnLoadSample').addEventListener('click', () => { const key = document.getElementById('sampleSelect').value; if (!key) return; const name = document.getElementById('sampleSelect').options[document.getElementById('sampleSelect').selectedIndex].text + '.html'; saveNewFile(name, SAMPLES[key]); renderToIframe(SAMPLES[key]); });
 document.getElementById('codeEditor').addEventListener('input', updateCharCount);
