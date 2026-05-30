@@ -73,8 +73,10 @@
     /* オーバーレイUI */
     #overlay-ui { position: absolute; inset: 0; pointer-events: none; z-index: 50; display: flex; flex-direction: column; justify-content: space-between; padding: 15px; }
     
-    /* 上部：タイトルバーと表示切り替えボタン */
-    .overlay-top { display: flex; align-items: center; gap: 8px; pointer-events: auto; }
+    /* 上部：タイトルバーと表示切り替えボタン ＋ 画面内フルスクリーンボタン */
+    .overlay-top { display: flex; justify-content: space-between; align-items: flex-start; pointer-events: none; }
+    .overlay-top-left { display: flex; align-items: center; gap: 8px; pointer-events: auto; }
+    .overlay-top-right { pointer-events: auto; }
     .overlay-title { background: rgba(0,0,0,0.6); padding: 6px 16px; border-radius: 20px; font-size: 13px; border: 1px solid #e9456055; color: #fff; font-weight: bold; transition: opacity 0.3s; }
     
     /* 下部：コントロールエリア */
@@ -181,18 +183,21 @@
     
     <div id="overlay-ui">
       <div class="overlay-top">
-        <div id="osd-filename" class="overlay-title">untitled.html</div>
-        <button id="btnToggleTitle" class="overlay-btn" style="padding: 6px 12px; border-radius: 20px; font-size:12px;">👁️</button>
+        <div class="overlay-top-left">
+          <div id="osd-filename" class="overlay-title">untitled.html</div>
+          <button id="btnToggleTitle" class="overlay-btn" style="padding: 6px 12px; border-radius: 20px; font-size:12px;">👁️</button>
+        </div>
+        <div class="overlay-top-right">
+          <button id="btnOverlayFullscreen" class="overlay-btn" style="padding: 6px 16px; border-radius: 20px; font-size:13px; background: rgba(111, 66, 193, 0.8); border-color: #6f42c1;">⛶ 拡大</button>
+        </div>
       </div>
       
       <div class="overlay-bottom">
-        
         <div class="overlay-left-controls">
           <div class="playback-controls">
             <button id="btnAutoPlay" class="overlay-btn">🔄 オートプレイ</button>
             <button id="btnNext" class="overlay-btn">⏭ 次へ</button>
           </div>
-          
           <div class="move-controls">
             <div></div>
             <button id="btnForward" class="overlay-btn move-btn">▲</button>
@@ -209,7 +214,6 @@
           <button id="btnUp" class="overlay-btn" style="border-radius: 20px 20px 8px 8px; height: 55px;">▲ 上昇</button>
           <button id="btnDown" class="overlay-btn" style="border-radius: 8px 8px 20px 20px; height: 55px;">▼ 下降</button>
         </div>
-        
       </div>
     </div>
   </div>
@@ -238,8 +242,7 @@ let autoPlayTimer = null;
 const AUTOPLAY_INTERVAL = 15000;
 let activeIframeId = 'iframeA';
 
-// 押しっぱなし移動用のタイマーオブジェクト
-let moveTimers = {};
+let moveTimers = {}; // 押しっぱなし移動用
 
 // =============================================
 //  ユーティリティ＆タブ管理
@@ -298,7 +301,6 @@ function saveNewFile(name, content) { files[name] = content; saveStorage(); rend
 function renderToIframe(html, customName = null) {
   document.getElementById('osd-filename').innerText = customName || activeFile || "untitled.html";
   
-  // ★ Three.js, A-Frame, Babylon.js の全移動に対応する高機能レシーバー ★
   const injectionScript = `
   <script>
     window.addEventListener('message', (e) => {
@@ -390,20 +392,19 @@ document.getElementById('btnToggleTitle').addEventListener('click', () => {
   const btn = document.getElementById('btnToggleTitle');
   if (titleEl.style.opacity === '0') {
     titleEl.style.opacity = '1';
-    btn.innerText = "👁️";
-    btn.style.opacity = "1";
+    btn.innerText = "👁️"; btn.style.opacity = "1";
   } else {
     titleEl.style.opacity = '0';
-    btn.innerText = "🙈";
-    btn.style.opacity = "0.5";
+    btn.innerText = "🙈"; btn.style.opacity = "0.5";
   }
 });
 
 // =============================================
-//  🍎 iPhone対応 フルスクリーン・疑似切り替え
+//  🍎 iPhone対応 フルスクリーン・疑似切り替え (完全連動)
 // =============================================
-document.getElementById('btnFullscreen').addEventListener('click', () => {
+function toggleFullscreen() {
   const viewer = document.getElementById('viewer-container');
+  // PCやAndroidなどのネイティブAPI対応ブラウザの場合
   if (document.fullscreenEnabled || viewer.webkitRequestFullscreen) {
     if (!document.fullscreenElement && !document.webkitFullscreenElement) {
       if (viewer.requestFullscreen) viewer.requestFullscreen();
@@ -413,10 +414,28 @@ document.getElementById('btnFullscreen').addEventListener('click', () => {
       else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
     }
   } else {
+    // iPhone / iOS Safari用 疑似フルスクリーン
     viewer.classList.toggle('pseudo-fullscreen');
-    document.getElementById('btnFullscreen').innerText = viewer.classList.contains('pseudo-fullscreen') ? "⛶ 元に戻す" : "⛶ フルスクリーン";
+    updateFullscreenButtons();
   }
-});
+}
+
+function updateFullscreenButtons() {
+  const viewer = document.getElementById('viewer-container');
+  const isNative = document.fullscreenElement || document.webkitFullscreenElement;
+  const isPseudo = viewer.classList.contains('pseudo-fullscreen');
+  const isFS = isNative || isPseudo;
+
+  document.getElementById('btnFullscreen').innerText = isFS ? "⛶ 元に戻す" : "⛶ フルスクリーン";
+  document.getElementById('btnOverlayFullscreen').innerHTML = isFS ? "⛶ 縮小 / 戻る" : "⛶ 拡大";
+}
+
+document.getElementById('btnFullscreen').addEventListener('click', toggleFullscreen);
+document.getElementById('btnOverlayFullscreen').addEventListener('click', toggleFullscreen);
+
+// ネイティブフルスクリーンの状態変化を監視してボタンを更新
+document.addEventListener('fullscreenchange', updateFullscreenButtons);
+document.addEventListener('webkitfullscreenchange', updateFullscreenButtons);
 
 // =============================================
 //  ✨ Gemini API (ローカルダイレクト)
@@ -461,9 +480,7 @@ document.getElementById('btnAiGenerate').addEventListener('click', async () => {
 // =============================================
 function sendCam(action) {
   const iframe = document.getElementById(activeIframeId);
-  if (iframe && iframe.contentWindow) {
-    iframe.contentWindow.postMessage({ action }, '*');
-  }
+  if (iframe && iframe.contentWindow) iframe.contentWindow.postMessage({ action }, '*');
 }
 
 function startMoving(action) {
@@ -554,7 +571,7 @@ document.getElementById('btnOverwrite').addEventListener('click', () => { files[
 
 const SAMPLES = {
   threejs_basic: `<!DOCTYPE html><html><head><style>body{margin:0;background:#000;overflow:hidden;}</style></head><body><script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"><\/script><script>const scene = new THREE.Scene(); const camera = new THREE.PerspectiveCamera(75, innerWidth/innerHeight, 0.1, 1000); window.camera = camera; const renderer = new THREE.WebGLRenderer({antialias:true}); renderer.setSize(innerWidth, innerHeight); document.body.appendChild(renderer.domElement); const geo = new THREE.BoxGeometry(); const mat = new THREE.MeshBasicMaterial({color: 0x00ff00, wireframe: true}); const cube = new THREE.Mesh(geo, mat); scene.add(cube); camera.position.z = 5; function animate() { requestAnimationFrame(animate); cube.rotation.x += 0.01; cube.rotation.y += 0.01; renderer.render(scene, camera); } animate();<\/script></body></html>`,
-  aframe_scene: `<!DOCTYPE html><html><head><script src="https://aframe.io/releases/1.4.0/aframe.min.js"><\/script></head><body><a-scene><a-box position="-1 0.5 -3" rotation="0 45 0" color="#4CC3D9"></a-box><a-sphere position="0 1.25 -5" radius="1.25" color="#EF2D5E"></a-sphere><a-cylinder position="1 0.75 -3" radius="0.5" height="1.5" color="#FFC65D"></a-cylinder><a-plane position="0 0 -4" rotation="-90 0 0" width="4" height="4" color="#7BC8A4"></a-plane><a-sky color="#ECECEC"></a-sky></a-scene></body></html>`
+  aframe_scene: `<!DOCTYPE html><html><head><script src="https://aframe.io/releases/1.4.0/aframe.min.js"><\/script></head><body><a-scene><a-box position="-1 0.5 -3" rotation="0 45 0" color="#4CC3D9"></a-box><a-sphere position="0 1.25 -5" radius="1.25" color="#EF2D5E"></a-sphere><a-plane position="0 0 -4" rotation="-90 0 0" width="4" height="4" color="#7BC8A4"></a-plane><a-sky color="#ECECEC"></a-sky></a-scene></body></html>`
 };
 document.getElementById('btnLoadSample').addEventListener('click', () => { const key = document.getElementById('sampleSelect').value; if (!key) return; const name = document.getElementById('sampleSelect').options[document.getElementById('sampleSelect').selectedIndex].text + '.html'; saveNewFile(name, SAMPLES[key]); renderToIframe(SAMPLES[key]); });
 document.getElementById('codeEditor').addEventListener('input', updateCharCount);
