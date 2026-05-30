@@ -298,7 +298,7 @@ document.getElementById('btnAiGenerate').addEventListener('click', async () => {
 
   try {
     // モデル (gemini) を指定
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`;
     const payload = {
       contents: [{ role: "user", parts: [{ text: `以下のHTMLコードを改修してください。\n\n【指示】\n${promptText}\n\n【現在のコード】\n${currentCode}` }] }],
       systemInstruction: { parts: [{ text: "あなたは優秀なWebVR・3Dグラフィックスエンジニアです。要求に従い修正した【HTMLコード全体】のみを出力してください。解説文やMarkdown記法(```html)などは一切含めないでください。" }] },
