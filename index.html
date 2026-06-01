@@ -523,7 +523,7 @@ document.getElementById('btnAiGenerate').addEventListener('click', async () => {
   btn.innerText = "⏳ AI空間設計中..."; btn.disabled = true;
 
   try {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent?key=${apiKey}`;
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`;
     const payload = {
       contents: [{ role: "user", parts: [{ text: `以下の3Dコードを変更指示に従って完全に改修してください。\n\n【指示】\n${promptText}\n\n【現在のコード】\n${currentCode}` }] }],
       systemInstruction: { parts: [{ text: "あなたは世界最高峰のWeb3Dプログラマーです。修正要求を満たした【HTMLコード全体】のみを返してください。不要な解説や\`\`\`htmlのようなマークダウン装飾は一切省いて出力してください。" }] },
