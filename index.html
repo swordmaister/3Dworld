@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <title>3D HTML Player & AI Editor v2.4</title>
+  <title>3D HTML Player & AI Editor v2.5</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
@@ -43,6 +43,8 @@
     .btn-secondary { background: #0f3460; color: #e0e0e0; border: 1px solid #e9456055; }
     .btn-success { background: #28a745; color: #fff; } 
     .btn-drive { background: #4285F4; color: #fff; }
+    .btn-warning { background: #f39c12; color: #fff; }
+    .btn-danger { background: #c0392b; color: #fff; }
     .btn-ai { background: #8e44ad; color: #fff; width: 100%; padding: 8px; margin-top: 5px; font-weight: bold; }
     button:hover:not(:disabled) { opacity: 0.85; transform: translateY(-1px); }
     button:disabled { opacity: 0.4; cursor: not-allowed; }
@@ -96,6 +98,18 @@
     .status-ok { color: #28a745; } .status-err { color: #e94560; }
     .status-warn { color: #ffc107; font-weight: bold; }
     .hidden { display: none !important; }
+
+    /* モーダルUI (ローカル保管庫) */
+    #localModal { position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 10000; display: flex; justify-content: center; align-items: center; backdrop-filter: blur(4px); }
+    .modal-content { background: #16213e; padding: 20px; border-radius: 8px; width: 95%; max-width: 600px; border: 1px solid #e94560; display: flex; flex-direction: column; max-height: 80vh; }
+    .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; border-bottom: 1px solid #0f3460; padding-bottom: 10px; }
+    .modal-header h2 { font-size: 16px; color: #fff; }
+    .local-list { overflow-y: auto; display: flex; flex-direction: column; gap: 10px; flex: 1; }
+    .local-item { background: #0a0e1a; padding: 12px; border-radius: 6px; border: 1px solid #0f3460; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; }
+    .local-item-info { flex: 1; min-width: 150px; }
+    .local-item-name { font-size: 14px; font-weight: bold; color: #e94560; word-break: break-all; }
+    .local-item-date { font-size: 11px; color: #aaa; margin-top: 4px; }
+    .local-item-actions { display: flex; gap: 6px; }
   </style>
 </head>
 <body>
@@ -113,6 +127,7 @@
 
 <div id="toolbar">
   <div class="toolbar-row">
+    <button class="btn-warning" id="btnOpenLocal">📂</button>
     <button class="btn-secondary" id="btnCopy">📋 コピー</button>
     <button class="btn-secondary" id="btnPaste">📋 ペースト</button>
     <button class="btn-secondary" id="btnClearCode">✨ クリア</button>
@@ -140,7 +155,7 @@
         <button class="btn-secondary" id="btnApiKey" style="padding:2px 8px; font-size:11px;">🔑 APIキー設定</button>
       </div>
       <textarea id="aiPrompt" placeholder="【変更指示】例: 街全体を夕暮れのライティングにして..."></textarea>
-      <button class="btn-ai" id="btnAiGenerate">✨ AIコード生成 / 実行</button>
+      <button class="btn-ai" id="btnAiGenerate">✨ AIコード生成 (バックグラウンド)</button>
     </div>
   </div>
 
@@ -163,9 +178,9 @@
       <div class="overlay-bottom">
         <div class="overlay-left-controls">
           <div class="playback-controls">
-            <button id="btnAutoPlay" class="overlay-btn">🔄 </button>
-            <button id="btnPrev" class="overlay-btn">⏮</button>
-            <button id="btnNext" class="overlay-btn">⏭</button>
+            <button id="btnAutoPlay" class="overlay-btn">🔄 オートプレイ</button>
+            <button id="btnPrev" class="overlay-btn">⏮ 前へ</button>
+            <button id="btnNext" class="overlay-btn">⏭ 次へ</button>
           </div>
           <div id="moveControls" class="move-controls" style="display: none;">
             <div></div><button id="btnForward" class="overlay-btn move-btn">▲</button><div></div>
@@ -190,12 +205,25 @@
   <div id="driveStatus">GAS未通信</div>
 </div>
 
+<div id="localModal" class="hidden">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h2>📂 ブラウザ・ローカル保管庫</h2>
+      <button id="btnCloseLocal" style="background:transparent; color:#fff; border:none; font-size:20px; cursor:pointer;">✖</button>
+    </div>
+    <div style="font-size:11px; color:#aaa; margin-bottom:10px;">※AIが生成したコードや一時保存されたファイルが端末内に保存されています。ブラウザのキャッシュをクリアすると消去されます。</div>
+    <div id="localFileList" class="local-list">
+      </div>
+  </div>
+</div>
+
 <script>
 // =============================================
 //  システム設定・状態管理
 // =============================================
 const GAS_URL = "https://script.google.com/macros/s/AKfycbzj54N3di_L0kSqrqSo0M8XCWbboID34OB2FcPChr9ss1SPp5NRbMfDbKPH2PezsEhzcA/exec";
 const API_KEY_STORAGE = 'gemini_api_key';
+const LOCAL_STORAGE_KEY = 'ai_editor_local_files';
 
 let activeFile = null;
 let driveFiles = [];
@@ -227,7 +255,6 @@ function renderToIframe(html, customName = null) {
   <script>
     window.addEventListener('message', (e) => {
       const action = e.data.action;
-      // 1. A-Frame
       const afCam = document.querySelector('a-camera, [camera]');
       if (afCam && afCam.object3D) {
         const obj = afCam.object3D; const dist = 0.4;
@@ -236,7 +263,6 @@ function renderToIframe(html, customName = null) {
         if (action === 'moveLeft') obj.translateX(-dist); if (action === 'moveRight') obj.translateX(dist);
         return;
       }
-      // 2. Three.js
       if (window.camera && window.camera.position) {
         const cam = window.camera; const dist = 1.8;
         if (action === 'moveUp') cam.position.y += dist; if (action === 'moveDown') cam.position.y -= dist;
@@ -276,23 +302,18 @@ document.getElementById('btnToggleTitle').addEventListener('click', () => {
   const btn = document.getElementById('btnToggleTitle');
 
   if (uiVisibilityState === 0) {
-    // State 0: デフォルト (タイトル ＋ 前後再生コントロールのみ表示)
     titleEl.style.opacity = '1';
     controlsEl.style.opacity = '1'; controlsEl.style.pointerEvents = 'auto';
     fsBtnEl.style.opacity = '1'; fsBtnEl.style.pointerEvents = 'auto';
-    moveEl.style.display = 'none';
-    camEl.style.display = 'none';
+    moveEl.style.display = 'none'; camEl.style.display = 'none';
     btn.innerText = "👁️"; btn.style.opacity = "1";
   } else if (uiVisibilityState === 1) {
-    // State 1: 全て表示 (A-Frame等の移動用コントローラーを追加表示)
     titleEl.style.opacity = '1';
     controlsEl.style.opacity = '1'; controlsEl.style.pointerEvents = 'auto';
     fsBtnEl.style.opacity = '1'; fsBtnEl.style.pointerEvents = 'auto';
-    moveEl.style.display = 'grid';
-    camEl.style.display = 'flex';
+    moveEl.style.display = 'grid'; camEl.style.display = 'flex';
     btn.innerText = "🎮"; btn.style.opacity = "1";
   } else {
-    // State 2: UI全消去 (このトグルボタン以外を隠す)
     titleEl.style.opacity = '0';
     controlsEl.style.opacity = '0'; controlsEl.style.pointerEvents = 'none';
     fsBtnEl.style.opacity = '0'; fsBtnEl.style.pointerEvents = 'none';
@@ -322,8 +343,97 @@ function updateFullscreenButtons() {
 }
 document.getElementById('btnFullscreen').addEventListener('click', toggleFullscreen);
 document.getElementById('btnOverlayFullscreen').addEventListener('click', toggleFullscreen);
-document.addEventListener('fullscreenchange', updateFullscreenButtons);
-document.addEventListener('webkitfullscreenchange', updateFullscreenButtons);
+
+// =============================================
+//  ローカルストレージ管理 (NEW)
+// =============================================
+function getLocalFiles() {
+  return JSON.parse(localStorage.getItem(LOCAL_STORAGE_KEY) || '[]');
+}
+function saveToLocalStore(name, content) {
+  const files = getLocalFiles();
+  const id = Date.now().toString();
+  files.push({ id, name, content, date: new Date().toLocaleString() });
+  localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(files));
+}
+function deleteLocalFile(id) {
+  if(!confirm("このファイルをローカルから完全に消去しますか？")) return;
+  const files = getLocalFiles().filter(f => f.id !== id);
+  localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(files));
+  renderLocalFiles();
+}
+
+function renderLocalFiles() {
+  const listEl = document.getElementById('localFileList');
+  const files = getLocalFiles();
+  listEl.innerHTML = '';
+  
+  if (files.length === 0) {
+    listEl.innerHTML = '<div style="color:#aaa; text-align:center; padding:20px;">保存されているファイルはありません</div>';
+    return;
+  }
+  
+  files.forEach(f => {
+    const item = document.createElement('div');
+    item.className = 'local-item';
+    item.innerHTML = `
+      <div class="local-item-info">
+        <div class="local-item-name">${f.name}</div>
+        <div class="local-item-date">${f.date}</div>
+      </div>
+      <div class="local-item-actions">
+        <button class="btn-info" onclick="loadFromLocal('${f.id}')">読込</button>
+        <button class="btn-success" onclick="saveLocalToDrive('${f.id}')">☁️ ドライブ</button>
+        <button class="btn-danger" onclick="deleteLocalFile('${f.id}')">消去</button>
+      </div>
+    `;
+    listEl.appendChild(item);
+  });
+}
+
+window.loadFromLocal = function(id) {
+  const file = getLocalFiles().find(f => f.id === id);
+  if(!file) return;
+  document.getElementById('codeEditor').value = file.content;
+  activeFile = file.name;
+  document.getElementById('currentFileLabel').textContent = `(ローカル) ${activeFile}`;
+  document.getElementById('btnSaveDrive').disabled = true; // ドライブファイルではないため
+  updateCharCount();
+  renderToIframe(file.content, activeFile);
+  document.getElementById('localModal').classList.add('hidden');
+  setStatus(`ローカルから「${activeFile}」を読み込みました`, "status-ok");
+};
+
+window.saveLocalToDrive = async function(id) {
+  const file = getLocalFiles().find(f => f.id === id);
+  if(!file) return;
+  let saveName = prompt("ドライブへ保存するファイル名を入力してください", file.name);
+  if (!saveName) return; 
+  if (!saveName.endsWith('.html')) saveName += '.html';
+  
+  setStatus("⏳ ドライブへアップロード中...", "status-warn");
+  document.getElementById('localModal').classList.add('hidden');
+
+  try {
+    const res = await fetch(GAS_URL, { method: "POST", body: JSON.stringify({ action: "create", fileName: saveName, content: file.content }) }); 
+    const data = await res.json();
+    if (data.success) { 
+      setStatus(`「${saveName}」をドライブに保存しました`, "status-ok");
+      fetchDriveFileList();
+    }
+  } catch (e) {
+    alert("保存中にエラーが発生しました");
+    setStatus("ドライブ保存エラー", "status-err");
+  }
+};
+
+document.getElementById('btnOpenLocal').addEventListener('click', () => {
+  renderLocalFiles();
+  document.getElementById('localModal').classList.remove('hidden');
+});
+document.getElementById('btnCloseLocal').addEventListener('click', () => {
+  document.getElementById('localModal').classList.add('hidden');
+});
 
 // =============================================
 //  GAS連携 (ドライブ完全同期)
@@ -341,16 +451,12 @@ async function fetchDriveFileList() {
     if (driveFiles.length === 0) {
       select.innerHTML = '<option value="">ファイルなし</option>';
       setDriveStatus('ファイルなし');
-      setStatus('ドライブにファイルがありません');
       return;
     }
     
     driveFiles.forEach((f, i) => select.add(new Option(f.name, i))); 
     setDriveStatus('GAS同期完了');
-
-    if (currentIndex === -1) {
-      playIndexFile(0);
-    }
+    if (currentIndex === -1) playIndexFile(0);
   } catch (e) { 
     select.innerHTML = '<option value="">通信エラー</option>'; 
     setDriveStatus('GASエラー'); 
@@ -401,9 +507,7 @@ document.getElementById('btnSaveDrive').addEventListener('click', async () => {
   try {
     const res = await fetch(GAS_URL, { method: "POST", body: JSON.stringify({ action: "update", fileName: activeFile, content: code }) }); 
     const data = await res.json();
-    if (data.success) { 
-      setStatus(`「${activeFile}」を上書き保存しました`, "status-ok");
-    }
+    if (data.success) setStatus(`「${activeFile}」を上書き保存しました`, "status-ok");
   } catch (e) {
     alert("保存中にエラーが発生しました");
   } finally { 
@@ -439,45 +543,33 @@ document.getElementById('btnSaveNewDrive').addEventListener('click', async () =>
 });
 
 // =============================================
-//  オートプレイ & 戻る・次へ コントロール系
+//  オートプレイ & 戻る・次へ
 // =============================================
 function playNextFile() { 
   if (driveFiles.length === 0) return; 
-  let n = currentIndex + 1; 
-  if (n >= driveFiles.length) n = 0; 
+  let n = currentIndex + 1; if (n >= driveFiles.length) n = 0; 
   playIndexFile(n); 
 }
 function playPrevFile() {
   if (driveFiles.length === 0) return;
-  let n = currentIndex - 1;
-  if (n < 0) n = driveFiles.length - 1;
+  let n = currentIndex - 1; if (n < 0) n = driveFiles.length - 1;
   playIndexFile(n);
 }
 
-document.getElementById('btnNext').addEventListener('click', () => { 
-  playNextFile(); 
-  if (isAutoPlay) { clearInterval(autoPlayTimer); autoPlayTimer = setInterval(playNextFile, AUTOPLAY_INTERVAL); } 
-});
-document.getElementById('btnPrev').addEventListener('click', () => { 
-  playPrevFile(); 
-  if (isAutoPlay) { clearInterval(autoPlayTimer); autoPlayTimer = setInterval(playNextFile, AUTOPLAY_INTERVAL); } 
-});
+document.getElementById('btnNext').addEventListener('click', () => { playNextFile(); if (isAutoPlay) { clearInterval(autoPlayTimer); autoPlayTimer = setInterval(playNextFile, AUTOPLAY_INTERVAL); } });
+document.getElementById('btnPrev').addEventListener('click', () => { playPrevFile(); if (isAutoPlay) { clearInterval(autoPlayTimer); autoPlayTimer = setInterval(playNextFile, AUTOPLAY_INTERVAL); } });
 
 document.getElementById('btnAutoPlay').addEventListener('click', (e) => {
   isAutoPlay = !isAutoPlay; const btn = e.target;
-  if (isAutoPlay) { btn.classList.add('active-mode'); btn.innerText = "⏹"; playNextFile(); autoPlayTimer = setInterval(playNextFile, AUTOPLAY_INTERVAL); } 
-  else { btn.classList.remove('active-mode'); btn.innerText = "🔄"; clearInterval(autoPlayTimer); }
+  if (isAutoPlay) { btn.classList.add('active-mode'); btn.innerText = "🔄 プレイ中"; playNextFile(); autoPlayTimer = setInterval(playNextFile, AUTOPLAY_INTERVAL); } 
+  else { btn.classList.remove('active-mode'); btn.innerText = "🔄 オートプレイ"; clearInterval(autoPlayTimer); }
 });
 
 function sendCam(action) { const iframe = document.getElementById(activeIframeId); if (iframe && iframe.contentWindow) iframe.contentWindow.postMessage({ action }, '*'); }
 function startMoving(action) { if (moveTimers[action]) return; sendCam(action); moveTimers[action] = setInterval(() => sendCam(action), 40); }
 function stopMoving(action) { if (moveTimers[action]) { clearInterval(moveTimers[action]); delete moveTimers[action]; } }
 
-const controlMapping = [
-  { id: 'btnUp', action: 'moveUp' }, { id: 'btnDown', action: 'moveDown' },
-  { id: 'btnForward', action: 'moveForward' }, { id: 'btnBackward', action: 'moveBackward' },
-  { id: 'btnLeft', action: 'moveLeft' }, { id: 'btnRight', action: 'moveRight' }
-];
+const controlMapping = [ { id: 'btnUp', action: 'moveUp' }, { id: 'btnDown', action: 'moveDown' }, { id: 'btnForward', action: 'moveForward' }, { id: 'btnBackward', action: 'moveBackward' }, { id: 'btnLeft', action: 'moveLeft' }, { id: 'btnRight', action: 'moveRight' } ];
 controlMapping.forEach(mapping => {
   const el = document.getElementById(mapping.id);
   if (el) {
@@ -492,43 +584,33 @@ controlMapping.forEach(mapping => {
 // =============================================
 document.getElementById('menuToggle').addEventListener('click', () => document.getElementById('toolbar').classList.toggle('hidden'));
 document.getElementById('btnToggleEditor').addEventListener('click', () => document.getElementById('editor-panel').classList.toggle('hidden'));
-
 document.getElementById('btnPreview').addEventListener('click', () => { renderToIframe(document.getElementById('codeEditor').value, activeFile); });
-
 document.getElementById('btnCopy').addEventListener('click', () => navigator.clipboard.writeText(document.getElementById('codeEditor').value).then(() => setStatus("クリップボードにコピーしました", "status-ok")));
-
 document.getElementById('btnPaste').addEventListener('click', async () => {
   try {
-    const text = await navigator.clipboard.readText();
-    document.getElementById('codeEditor').value = text;
-    updateCharCount();
-    renderToIframe(text, activeFile || "未保存ファイル");
-    setStatus("ペーストしてプレビューを更新しました", "status-ok");
-  } catch (err) {
-    alert("クリップボードの読み取りが許可されていないか、エラーが発生しました。\nブラウザの権限設定を確認してください。");
-  }
+    const text = await navigator.clipboard.readText(); document.getElementById('codeEditor').value = text;
+    updateCharCount(); renderToIframe(text, activeFile || "未保存ファイル"); setStatus("ペーストしてプレビューを更新しました", "status-ok");
+  } catch (err) { alert("クリップボード読込エラー。ブラウザの権限設定を確認してください。"); }
 });
-
 document.getElementById('codeEditor').addEventListener('input', updateCharCount);
 
 document.getElementById('btnClearCode').addEventListener('click', () => {
-  if(confirm("エディタの内容をクリアして新規作成の準備をしますか？(ドライブのファイルは消えません)")) {
+  if(confirm("エディタの内容をクリアして新規作成の準備をしますか？")) {
     document.getElementById('codeEditor').value = '<!DOCTYPE html>\n<html>\n<head>\n  <meta charset="UTF-8">\n</head>\n<body>\n\n</body>\n</html>';
     activeFile = null;
     document.getElementById('currentFileLabel').textContent = "未保存の新規ファイル";
     document.getElementById('btnSaveDrive').disabled = true;
-    updateCharCount();
-    renderToIframe(document.getElementById('codeEditor').value, "未保存ファイル");
+    updateCharCount(); renderToIframe(document.getElementById('codeEditor').value, "未保存ファイル");
     setStatus("エディタをクリアしました");
   }
 });
 
 // =============================================
-//  ✨ Gemini API 連携
+//  ✨ Gemini API 非同期連携
 // =============================================
 document.getElementById('btnApiKey').addEventListener('click', () => {
   const currentKey = localStorage.getItem(API_KEY_STORAGE) || "";
-  const newKey = prompt("Gemini APIキーを入力してください。\n※ブラウザに安全に保存されます。", currentKey);
+  const newKey = prompt("Gemini APIキーを入力してください。", currentKey);
   if (newKey !== null) { localStorage.setItem(API_KEY_STORAGE, newKey.trim()); setStatus("APIキーを保存しました", "status-ok"); }
 });
 
@@ -540,47 +622,38 @@ document.getElementById('btnAiGenerate').addEventListener('click', async () => {
   if (!promptText.trim() || !currentCode.trim()) return alert("指示または対象コードが空です。");
 
   const btn = document.getElementById('btnAiGenerate');
-  btn.innerText = "⏳ AI空間設計中..."; btn.disabled = true;
+  btn.innerText = "⏳ バックグラウンドでAI設計中..."; btn.disabled = true;
+  setStatus("AIへ指示を送信しました。他の作業を継続できます。", "status-warn");
 
-  try {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`;
-    const payload = {
+  const generateTargetName = activeFile ? activeFile.replace(/\.html$/, '_AI.html') : 'new_AI.html';
+
+  // 非同期でAPI呼び出しを行い、待機しない
+  fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`, { 
+    method: "POST", headers: { "Content-Type": "application/json" }, 
+    body: JSON.stringify({
       contents: [{ role: "user", parts: [{ text: `以下の3Dコードを変更指示に従って完全に改修してください。\n\n【指示】\n${promptText}\n\n【現在のコード】\n${currentCode}` }] }],
       systemInstruction: { parts: [{ text: "あなたは世界最高峰のWeb3Dプログラマーです。修正要求を満たした【HTMLコード全体】のみを返してください。不要な解説や\`\`\`htmlのようなマークダウン装飾は一切省いて出力してください。" }] },
       generationConfig: { temperature: 0.2 }
-    };
-    const res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
-    if (!res.ok) throw new Error("APIエラー");
-    const data = await res.json();
+    })
+  })
+  .then(res => { if(!res.ok) throw new Error("APIエラー"); return res.json(); })
+  .then(data => {
     let newCode = data.candidates[0].content.parts[0].text;
     newCode = newCode.replace(/^```(html)?\n?/, '').replace(/\n?```$/, '').trim();
-
-    document.getElementById('codeEditor').value = newCode;
-    updateCharCount(); 
     
-    // =============================================
-    // 安全装置: 取得成功後にファイル名を自動変更して上書きを防止
-    // =============================================
-    const originalName = activeFile || "新規ファイル";
-    activeFile = activeFile ? activeFile.replace(/\.html$/, '_new.html') : 'new_ai.html';
+    // 生成完了したらローカルストレージへ保存
+    saveToLocalStore(generateTargetName, newCode);
     
-    document.getElementById('currentFileLabel').textContent = activeFile;
-    document.getElementById('osd-filename').innerText = activeFile;
-    
-    // 上書き保存ボタンを無効化し、強制的に「新規保存」を促す
-    document.getElementById('btnSaveDrive').disabled = true;
-    
-    renderToIframe(newCode, activeFile); 
-    
-    // 下部ログに通知
-    setStatus(`AI生成完了。コード消失防止のため「${originalName}」から「${activeFile}」に名称を変更して一時保持しました。`, "status-warn");
-    
-  } catch (e) { 
-    alert("AI実行エラー: " + e.message); 
-  } finally { 
-    btn.innerText = "✨ AIコード生成 / 実行"; 
+    setStatus(`✅ AI処理完了！「${generateTargetName}」をローカル保管庫に保存しました。`, "status-ok");
+  })
+  .catch(e => { 
+    setStatus("❌ AI実行エラー: " + e.message, "status-err"); 
+  })
+  .finally(() => { 
+    btn.innerText = "✨ AIコード生成 (バックグラウンド)"; 
     btn.disabled = false; 
-  }
+    document.getElementById('aiPrompt').value = ''; // プロンプトをクリア
+  });
 });
 
 // アプリ起動時の初期化処理
