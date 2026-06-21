@@ -178,9 +178,9 @@
       <div class="overlay-bottom">
         <div class="overlay-left-controls">
           <div class="playback-controls">
-            <button id="btnAutoPlay" class="overlay-btn">🔄 オートプレイ</button>
-            <button id="btnPrev" class="overlay-btn">⏮ 前へ</button>
-            <button id="btnNext" class="overlay-btn">⏭ 次へ</button>
+            <button id="btnAutoPlay" class="overlay-btn">🔄 </button>
+            <button id="btnPrev" class="overlay-btn">⏮ </button>
+            <button id="btnNext" class="overlay-btn">⏭ </button>
           </div>
           <div id="moveControls" class="move-controls" style="display: none;">
             <div></div><button id="btnForward" class="overlay-btn move-btn">▲</button><div></div>
@@ -561,8 +561,8 @@ document.getElementById('btnPrev').addEventListener('click', () => { playPrevFil
 
 document.getElementById('btnAutoPlay').addEventListener('click', (e) => {
   isAutoPlay = !isAutoPlay; const btn = e.target;
-  if (isAutoPlay) { btn.classList.add('active-mode'); btn.innerText = "🔄 プレイ中"; playNextFile(); autoPlayTimer = setInterval(playNextFile, AUTOPLAY_INTERVAL); } 
-  else { btn.classList.remove('active-mode'); btn.innerText = "🔄 オートプレイ"; clearInterval(autoPlayTimer); }
+  if (isAutoPlay) { btn.classList.add('active-mode'); btn.innerText = "⏹"; playNextFile(); autoPlayTimer = setInterval(playNextFile, AUTOPLAY_INTERVAL); } 
+  else { btn.classList.remove('active-mode'); btn.innerText = "🔄 "; clearInterval(autoPlayTimer); }
 });
 
 function sendCam(action) { const iframe = document.getElementById(activeIframeId); if (iframe && iframe.contentWindow) iframe.contentWindow.postMessage({ action }, '*'); }
