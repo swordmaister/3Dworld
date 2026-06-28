@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <title>3D HTML Player & AI Editor v2.5</title>
+  <title>3D HTML Player & AI Editor v2.6</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
@@ -126,17 +126,27 @@
 </div>
 
 <div id="toolbar">
+  <!-- フォルダ切り替え機能追加 -->
   <div class="toolbar-row">
+    <span style="font-size:11px; color:#aaa;">📁 フォルダ:</span>
+    <select id="targetFolderSelect" style="flex:1; min-width:100px;"></select>
+    <button class="btn-secondary" id="btnAddFolder" style="padding: 6px; font-size:11px;">＋追加</button>
+    <button class="btn-secondary" id="btnDelFolder" style="padding: 6px; font-size:11px;">✖削除</button>
+  </div>
+  
+  <div class="toolbar-row" style="padding-top: 5px; border-top: 1px dashed #0f3460;">
     <button class="btn-warning" id="btnOpenLocal">📂</button>
     <button class="btn-secondary" id="btnCopy">📋 コピー</button>
     <button class="btn-secondary" id="btnPaste">📋 ペースト</button>
     <button class="btn-secondary" id="btnClearCode">✨ クリア</button>
   </div>
+  
   <div class="toolbar-row" style="padding-top: 5px; border-top: 1px dashed #0f3460;">
     <button class="btn-drive" id="btnLoadDriveList">☁️ リスト更新</button>
     <select id="driveFileSelect" style="flex:1; min-width: 120px;"><option value="">ドライブ未読込</option></select>
     <button class="btn-drive" id="btnLoadDrive">読込</button>
   </div>
+  
   <div class="toolbar-row" style="padding-top: 5px; border-top: 1px dashed #0f3460;">
     <button class="btn-info" id="btnPreview">🔄 更新</button>
     <button class="btn-success" id="btnSaveNewDrive">☁️ 新規保存</button>
@@ -224,6 +234,8 @@
 const GAS_URL = "https://script.google.com/macros/s/AKfycbzj54N3di_L0kSqrqSo0M8XCWbboID34OB2FcPChr9ss1SPp5NRbMfDbKPH2PezsEhzcA/exec";
 const API_KEY_STORAGE = 'gemini_api_key';
 const LOCAL_STORAGE_KEY = 'ai_editor_local_files';
+const FOLDER_STORAGE_KEY = 'ai_editor_folders';
+const LAST_FOLDER_KEY = 'ai_editor_last_folder';
 
 let activeFile = null;
 let driveFiles = [];
@@ -233,6 +245,66 @@ let autoPlayTimer = null;
 const AUTOPLAY_INTERVAL = 15000;
 let activeIframeId = 'iframeA';
 let moveTimers = {};
+
+// =============================================
+//  フォルダ管理機能 (NEW)
+// =============================================
+let savedFolders = JSON.parse(localStorage.getItem(FOLDER_STORAGE_KEY) || '[]');
+if (savedFolders.length === 0) {
+  // 初期値：デフォルトフォルダ
+  savedFolders = [{ name: "デフォルト (GAS設定)", id: "" }];
+  localStorage.setItem(FOLDER_STORAGE_KEY, JSON.stringify(savedFolders));
+}
+
+function renderFolderSelect() {
+  const select = document.getElementById('targetFolderSelect');
+  select.innerHTML = '';
+  savedFolders.forEach(f => {
+    select.add(new Option(f.name, f.id));
+  });
+  
+  // 前回選択していたフォルダを復元
+  const lastFolder = localStorage.getItem(LAST_FOLDER_KEY);
+  if(lastFolder !== null && savedFolders.find(f => f.id === lastFolder)) {
+    select.value = lastFolder;
+  }
+}
+
+document.getElementById('targetFolderSelect').addEventListener('change', (e) => {
+  localStorage.setItem(LAST_FOLDER_KEY, e.target.value);
+  fetchDriveFileList();
+});
+
+document.getElementById('btnAddFolder').addEventListener('click', () => {
+  const name = prompt("フォルダの表示名を入力してください\n(例: プロジェクトA)");
+  if (!name) return;
+  const id = prompt("フォルダIDを入力してください\n(Google DriveのURLに含まれる文字列)");
+  if (!id) return;
+  
+  savedFolders.push({ name, id });
+  localStorage.setItem(FOLDER_STORAGE_KEY, JSON.stringify(savedFolders));
+  renderFolderSelect();
+  document.getElementById('targetFolderSelect').value = id;
+  localStorage.setItem(LAST_FOLDER_KEY, id);
+  fetchDriveFileList();
+});
+
+document.getElementById('btnDelFolder').addEventListener('click', () => {
+  const select = document.getElementById('targetFolderSelect');
+  const id = select.value;
+  if(id === "") {
+    alert("デフォルトフォルダは削除できません。");
+    return;
+  }
+  if(confirm("選択中のフォルダをリストから削除しますか？\n(Drive上の実際のフォルダは消えません)")) {
+    savedFolders = savedFolders.filter(f => f.id !== id);
+    localStorage.setItem(FOLDER_STORAGE_KEY, JSON.stringify(savedFolders));
+    renderFolderSelect();
+    localStorage.setItem(LAST_FOLDER_KEY, savedFolders[0].id);
+    fetchDriveFileList();
+  }
+});
+
 
 // =============================================
 //  ユーティリティ
@@ -345,7 +417,7 @@ document.getElementById('btnFullscreen').addEventListener('click', toggleFullscr
 document.getElementById('btnOverlayFullscreen').addEventListener('click', toggleFullscreen);
 
 // =============================================
-//  ローカルストレージ管理 (NEW)
+//  ローカルストレージ管理
 // =============================================
 function getLocalFiles() {
   return JSON.parse(localStorage.getItem(LOCAL_STORAGE_KEY) || '[]');
@@ -397,7 +469,7 @@ window.loadFromLocal = function(id) {
   document.getElementById('codeEditor').value = file.content;
   activeFile = file.name;
   document.getElementById('currentFileLabel').textContent = `(ローカル) ${activeFile}`;
-  document.getElementById('btnSaveDrive').disabled = true; // ドライブファイルではないため
+  document.getElementById('btnSaveDrive').disabled = true;
   updateCharCount();
   renderToIframe(file.content, activeFile);
   document.getElementById('localModal').classList.add('hidden');
@@ -413,9 +485,15 @@ window.saveLocalToDrive = async function(id) {
   
   setStatus("⏳ ドライブへアップロード中...", "status-warn");
   document.getElementById('localModal').classList.add('hidden');
+  
+  // 選択中のフォルダIDを取得
+  const folderId = document.getElementById('targetFolderSelect').value;
 
   try {
-    const res = await fetch(GAS_URL, { method: "POST", body: JSON.stringify({ action: "create", fileName: saveName, content: file.content }) }); 
+    const res = await fetch(GAS_URL, { 
+      method: "POST", 
+      body: JSON.stringify({ action: "create", fileName: saveName, content: file.content, folderId: folderId }) 
+    }); 
     const data = await res.json();
     if (data.success) { 
       setStatus(`「${saveName}」をドライブに保存しました`, "status-ok");
@@ -443,8 +521,12 @@ async function fetchDriveFileList() {
   select.innerHTML = '<option value="">⏳ 取得中...</option>';
   setDriveStatus('GAS同期中...');
   
+  // 選択中のフォルダIDを取得してURLに付与
+  const folderId = document.getElementById('targetFolderSelect').value;
+  const requestUrl = folderId ? `${GAS_URL}?folderId=${folderId}` : GAS_URL;
+  
   try {
-    const res = await fetch(GAS_URL); 
+    const res = await fetch(requestUrl); 
     driveFiles = await res.json(); 
     select.innerHTML = '';
     
@@ -456,7 +538,9 @@ async function fetchDriveFileList() {
     
     driveFiles.forEach((f, i) => select.add(new Option(f.name, i))); 
     setDriveStatus('GAS同期完了');
-    if (currentIndex === -1) playIndexFile(0);
+    
+    // フォルダ切り替え直後は最初のファイルを再生
+    playIndexFile(0);
   } catch (e) { 
     select.innerHTML = '<option value="">通信エラー</option>'; 
     setDriveStatus('GASエラー'); 
@@ -505,7 +589,10 @@ document.getElementById('btnSaveDrive').addEventListener('click', async () => {
   btn.innerText = "⏳ 保存中"; btn.disabled = true;
   
   try {
-    const res = await fetch(GAS_URL, { method: "POST", body: JSON.stringify({ action: "update", fileName: activeFile, content: code }) }); 
+    const res = await fetch(GAS_URL, { 
+      method: "POST", 
+      body: JSON.stringify({ action: "update", fileName: activeFile, content: code }) 
+    }); 
     const data = await res.json();
     if (data.success) setStatus(`「${activeFile}」を上書き保存しました`, "status-ok");
   } catch (e) {
@@ -524,8 +611,14 @@ document.getElementById('btnSaveNewDrive').addEventListener('click', async () =>
   const btn = document.getElementById('btnSaveNewDrive'); 
   btn.innerText = "⏳ 新規保存中"; btn.disabled = true;
   
+  // 選択中のフォルダIDを取得
+  const folderId = document.getElementById('targetFolderSelect').value;
+  
   try {
-    const res = await fetch(GAS_URL, { method: "POST", body: JSON.stringify({ action: "create", fileName: saveName, content: code }) }); 
+    const res = await fetch(GAS_URL, { 
+      method: "POST", 
+      body: JSON.stringify({ action: "create", fileName: saveName, content: code, folderId: folderId }) 
+    }); 
     const data = await res.json();
     if (data.success) { 
       activeFile = saveName;
@@ -657,6 +750,7 @@ document.getElementById('btnAiGenerate').addEventListener('click', async () => {
 });
 
 // アプリ起動時の初期化処理
+renderFolderSelect();
 fetchDriveFileList();
 
 </script>
