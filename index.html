@@ -249,12 +249,22 @@ let moveTimers = {};
 // =============================================
 //  フォルダ管理機能 (NEW)
 // =============================================
+// =============================================
+//  フォルダ管理機能 (NEW)
+// =============================================
 let savedFolders = JSON.parse(localStorage.getItem(FOLDER_STORAGE_KEY) || '[]');
-if (savedFolders.length === 0) {
-  // 初期値：デフォルトフォルダ
-  savedFolders = [{ name: "デフォルト (GAS設定)", id: "" }];
+
+// もしブラウザが「古いデフォルト設定(IDが空)」を記憶していたら、新しい指定フォルダに強制上書きする
+if (savedFolders.length > 0 && savedFolders[0].id === "") {
+  savedFolders[0] = { name: "メインフォルダ", id: "18Qs7gwrPdzroKNZD7Yut2loFnvM_i2mv" };
+  localStorage.setItem(FOLDER_STORAGE_KEY, JSON.stringify(savedFolders));
+} 
+// 初回起動時のデフォルト値
+else if (savedFolders.length === 0) {
+  savedFolders = [{ name: "メインフォルダ", id: "18Qs7gwrPdzroKNZD7Yut2loFnvM_i2mv" }];
   localStorage.setItem(FOLDER_STORAGE_KEY, JSON.stringify(savedFolders));
 }
+
 
 function renderFolderSelect() {
   const select = document.getElementById('targetFolderSelect');
