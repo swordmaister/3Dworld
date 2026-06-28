@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <title>3D HTML Player & AI Editor v2.8</title>
+  <title>3D HTML Player & AI Editor v2.9</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
@@ -116,7 +116,7 @@
 
 <div id="header">
   <div class="header-left">
-    <h1>🎮 3DViewer & AI Editor</h1>
+    <h1>🎮 3D Viewer & AI Editor</h1>
     <button id="menuToggle">☰</button>
   </div>
   <div class="header-right">
@@ -126,7 +126,6 @@
 </div>
 
 <div id="toolbar">
-  <!-- フォルダ切り替え機能追加 -->
   <div class="toolbar-row">
     <span style="font-size:11px; color:#aaa;">📁 フォルダ:</span>
     <select id="targetFolderSelect" style="flex:1; min-width:100px;"></select>
@@ -231,14 +230,14 @@
 // =============================================
 //  システム設定・状態管理
 // =============================================
-const GAS_URL = "https://script.google.com/macros/s/AKfycbzj54N3di_L0kSqrqSo0M8XCWbboID34OB2FcPChr9ss1SPp5NRbMfDbKPH2PezsEhzcA/exec";
+const GAS_URL = "https://script.google.com/macros/s/AKfycbwOPf0T4oov1sn5_KPHE65FLZdBnCsT9ZvEE5DIrD9KUPEdir20OhBzXj0CrZASIrvy/exec";
 const API_KEY_STORAGE = 'gemini_api_key';
 const LOCAL_STORAGE_KEY = 'ai_editor_local_files';
 const FOLDER_STORAGE_KEY = 'ai_editor_folders';
 const LAST_FOLDER_KEY = 'ai_editor_last_folder';
 
 let activeFile = null;
-let activeFileId = null; // ★ v2.8追加: 上書き保存をfileIdで確実に行うため
+let activeFileId = null;
 let driveFiles = [];
 let currentIndex = -1;
 let isAutoPlay = false;
@@ -252,18 +251,15 @@ let moveTimers = {};
 // =============================================
 let savedFolders = JSON.parse(localStorage.getItem(FOLDER_STORAGE_KEY) || '[]');
 
-// もしブラウザが「古いデフォルト設定(IDが空)」を記憶していたら、新しい指定フォルダに強制上書きする
+// デフォルト設定
 if (savedFolders.length > 0 && savedFolders[0].id === "") {
   savedFolders[0] = { name: "メインフォルダ", id: "18Qs7gwrPdzroKNZD7Yut2loFnvM_i2mv" };
   localStorage.setItem(FOLDER_STORAGE_KEY, JSON.stringify(savedFolders));
-} 
-// 初回起動時のデフォルト値
-else if (savedFolders.length === 0) {
+} else if (savedFolders.length === 0) {
   savedFolders = [{ name: "メインフォルダ", id: "18Qs7gwrPdzroKNZD7Yut2loFnvM_i2mv" }];
   localStorage.setItem(FOLDER_STORAGE_KEY, JSON.stringify(savedFolders));
 }
 
-// ★ FIX: 引数で選択フォルダを明示的に指定できるように改善
 function renderFolderSelect(selectFolderId = null) {
   const select = document.getElementById('targetFolderSelect');
   select.innerHTML = '';
@@ -271,49 +267,43 @@ function renderFolderSelect(selectFolderId = null) {
     select.add(new Option(f.name, f.id));
   });
   
-  // selectFolderId が明示的に指定されていればそれを選択
   if (selectFolderId !== null) {
     select.value = selectFolderId;
     localStorage.setItem(LAST_FOLDER_KEY, selectFolderId);
   } else {
-    // 前回選択していたフォルダを復元
     const lastFolder = localStorage.getItem(LAST_FOLDER_KEY);
     if(lastFolder !== null && savedFolders.find(f => f.id === lastFolder)) {
       select.value = lastFolder;
     } else if (savedFolders.length > 0) {
-      // フォルダが存在しない場合は最初のフォルダをデフォルト選択
       select.value = savedFolders[0].id;
       localStorage.setItem(LAST_FOLDER_KEY, savedFolders[0].id);
     }
   }
 }
 
-// ★ FIX: セレクト変更を適切に同期
 document.getElementById('targetFolderSelect').addEventListener('change', (e) => {
   const selectedId = e.target.value;
   localStorage.setItem(LAST_FOLDER_KEY, selectedId);
-  setStatus(`フォルダを切り替えました: ${e.target.options[e.target.selectedIndex].text}`);
+  setStatus(`フォルダ切替準備: ${e.target.options[e.target.selectedIndex].text}`);
   fetchDriveFileList();
 });
 
-// ★ FIX: フォルダ追加時に新規IDを明示的に選択
 document.getElementById('btnAddFolder').addEventListener('click', () => {
   const name = prompt("フォルダの表示名を入力してください\n(例: プロジェクトA)");
   if (!name) return;
-  const id = prompt("フォルダIDを入力してください\n(Google DriveのURLに含まれる文字列)");
+  let id = prompt("フォルダIDを入力してください\n(Google DriveのURLに含まれる文字列)");
   if (!id) return;
+  
+  id = id.trim(); // 空白を削除
   
   savedFolders.push({ name, id });
   localStorage.setItem(FOLDER_STORAGE_KEY, JSON.stringify(savedFolders));
   
-  // ★ 重要：新規追加したフォルダを選択状態で表示
   renderFolderSelect(id);
-  
   setStatus(`フォルダ「${name}」を追加しました`, "status-ok");
   fetchDriveFileList();
 });
 
-// ★ FIX: フォルダ削除時に次のフォルダを明示的に選択
 document.getElementById('btnDelFolder').addEventListener('click', () => {
   const select = document.getElementById('targetFolderSelect');
   const currentId = select.value;
@@ -328,7 +318,6 @@ document.getElementById('btnDelFolder').addEventListener('click', () => {
     savedFolders = savedFolders.filter(f => f.id !== currentId);
     localStorage.setItem(FOLDER_STORAGE_KEY, JSON.stringify(savedFolders));
     
-    // ★ 重要：削除後、最初のフォルダを選択
     const nextFolderId = savedFolders.length > 0 ? savedFolders[0].id : null;
     renderFolderSelect(nextFolderId);
     
@@ -392,7 +381,7 @@ function renderToIframe(html, customName = null) {
 }
 
 // =============================================
-//  UIトグル系 (3段階の表示切り替え)
+//  UIトグル系
 // =============================================
 let uiVisibilityState = 0;
 document.getElementById('btnToggleTitle').addEventListener('click', () => {
@@ -499,7 +488,7 @@ window.loadFromLocal = function(id) {
   if(!file) return;
   document.getElementById('codeEditor').value = file.content;
   activeFile = file.name;
-  activeFileId = null; // ★ v2.8: ローカルファイルはfileIdなし
+  activeFileId = null; 
   document.getElementById('currentFileLabel').textContent = `(ローカル) ${activeFile}`;
   document.getElementById('btnSaveDrive').disabled = true;
   updateCharCount();
@@ -518,7 +507,6 @@ window.saveLocalToDrive = async function(id) {
   setStatus("⏳ ドライブへアップロード中...", "status-warn");
   document.getElementById('localModal').classList.add('hidden');
   
-  // 選択中のフォルダIDを取得
   const folderId = document.getElementById('targetFolderSelect').value;
 
   try {
@@ -546,64 +534,76 @@ document.getElementById('btnCloseLocal').addEventListener('click', () => {
 });
 
 // =============================================
-//  GAS連携 (ドライブ完全同期)
+//  GAS連携 (キャッシュ無効化 ＆ デバッグ強化)
 // =============================================
 async function fetchDriveFileList() {
   const select = document.getElementById('driveFileSelect'); 
   select.innerHTML = '<option value="">⏳ 取得中...</option>';
   setDriveStatus('GAS同期中...');
   
-  // 選択中のフォルダIDを取得してURLに付与
   const folderId = document.getElementById('targetFolderSelect').value;
   const requestUrl = folderId ? `${GAS_URL}?folderId=${folderId}` : GAS_URL;
   
+  setStatus(`通信中 (ID: ${folderId.substring(0, 5)}...)`);
+  
   try {
-    const res = await fetch(requestUrl); 
-    driveFiles = await res.json(); 
+    const res = await fetch(requestUrl, { cache: 'no-store' }); 
+    const data = await res.json(); 
+    
+    // エラーレスポンスの処理を追加
+    if (data.error || data.success === false) {
+      throw new Error(data.error || "フォルダの読み込みに失敗しました");
+    }
+
+    driveFiles = data; // 正常時は配列として扱う
     select.innerHTML = '';
     
     if (driveFiles.length === 0) {
       select.innerHTML = '<option value="">ファイルなし</option>';
       setDriveStatus('ファイルなし');
+      setStatus('このフォルダにはファイルがありません', 'status-warn');
       return;
     }
     
     driveFiles.forEach((f, i) => select.add(new Option(f.name, i))); 
     setDriveStatus('GAS同期完了');
+    setStatus(`リスト取得完了 (${driveFiles.length}件)`, "status-ok");
     
-    // フォルダ切り替え直後は最初のファイルを再生
     playIndexFile(0);
   } catch (e) { 
     select.innerHTML = '<option value="">通信エラー</option>'; 
     setDriveStatus('GASエラー'); 
+    setStatus(`エラー: ${e.message}`, "status-err");
   }
 }
 
 async function playIndexFile(idx) {
   if (!driveFiles[idx]) return; 
   document.getElementById('osd-filename').innerText = `⏳ 読込中: ${driveFiles[idx].name}`;
-  setStatus(`「${driveFiles[idx].name}」を読み込んでいます...`);
+  setStatus(`「${driveFiles[idx].name}」を読込中...`);
   
   try {
-    const res = await fetch(`${GAS_URL}?fileId=${driveFiles[idx].id}`); 
+    const res = await fetch(`${GAS_URL}?fileId=${driveFiles[idx].id}`, { cache: 'no-store' }); 
     const data = await res.json();
     if (data.success) { 
       currentIndex = idx; 
       document.getElementById('driveFileSelect').value = idx; 
       
       activeFile = driveFiles[idx].name;
-      activeFileId = driveFiles[idx].id; // ★ v2.8追加: fileIdを保持
+      activeFileId = driveFiles[idx].id; 
       document.getElementById('currentFileLabel').textContent = activeFile;
       document.getElementById('codeEditor').value = data.html;
       document.getElementById('btnSaveDrive').disabled = false;
       
       updateCharCount(); 
       renderToIframe(data.html, activeFile); 
-      setStatus(`「${activeFile}」を展開しました`, "status-ok");
+      setStatus(`読込成功: ${activeFile}`, "status-ok");
+    } else {
+      setStatus(`読込エラー: ${data.error}`, "status-err");
     }
   } catch (e) { 
     document.getElementById('osd-filename').innerText = "❌ 読込エラー"; 
-    setStatus('読み込みに失敗しました', 'status-err');
+    setStatus(`読込失敗: ${e.message}`, 'status-err');
   }
 }
 
@@ -624,7 +624,7 @@ document.getElementById('btnSaveDrive').addEventListener('click', async () => {
   try {
     const res = await fetch(GAS_URL, { 
       method: "POST", 
-      body: JSON.stringify({ action: "update", fileName: activeFile, fileId: activeFileId, content: code }) // ★ v2.8: fileId追加
+      body: JSON.stringify({ action: "update", fileName: activeFile, fileId: activeFileId, content: code }) 
     }); 
     const data = await res.json();
     if (data.success) setStatus(`「${activeFile}」を上書き保存しました`, "status-ok");
@@ -644,7 +644,6 @@ document.getElementById('btnSaveNewDrive').addEventListener('click', async () =>
   const btn = document.getElementById('btnSaveNewDrive'); 
   btn.innerText = "⏳ 新規保存中"; btn.disabled = true;
   
-  // 選択中のフォルダIDを取得
   const folderId = document.getElementById('targetFolderSelect').value;
   
   try {
@@ -655,7 +654,7 @@ document.getElementById('btnSaveNewDrive').addEventListener('click', async () =>
     const data = await res.json();
     if (data.success) { 
       activeFile = saveName;
-      activeFileId = data.fileId; // ★ v2.8: 新規保存後のfileIdを保持
+      activeFileId = data.fileId; 
       document.getElementById('currentFileLabel').textContent = activeFile;
       document.getElementById('btnSaveDrive').disabled = false;
       document.getElementById('osd-filename').innerText = activeFile;
@@ -725,7 +724,7 @@ document.getElementById('btnClearCode').addEventListener('click', () => {
   if(confirm("エディタの内容をクリアして新規作成の準備をしますか？")) {
     document.getElementById('codeEditor').value = '<!DOCTYPE html>\n<html>\n<head>\n  <meta charset="UTF-8">\n</head>\n<body>\n\n</body>\n</html>';
     activeFile = null;
-    activeFileId = null; // ★ v2.8: クリア時にfileIdもリセット
+    activeFileId = null;
     document.getElementById('currentFileLabel').textContent = "未保存の新規ファイル";
     document.getElementById('btnSaveDrive').disabled = true;
     updateCharCount(); renderToIframe(document.getElementById('codeEditor').value, "未保存ファイル");
@@ -755,7 +754,6 @@ document.getElementById('btnAiGenerate').addEventListener('click', async () => {
 
   const generateTargetName = activeFile ? activeFile.replace(/\.html$/, '_AI.html') : 'new_AI.html';
 
-  // 非同期でAPI呼び出しを行い、待機しない
   fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`, { 
     method: "POST", headers: { "Content-Type": "application/json" }, 
     body: JSON.stringify({
@@ -769,7 +767,6 @@ document.getElementById('btnAiGenerate').addEventListener('click', async () => {
     let newCode = data.candidates[0].content.parts[0].text;
     newCode = newCode.replace(/^```(html)?\n?/, '').replace(/\n?```$/, '').trim();
     
-    // 生成完了したらローカルストレージへ保存
     saveToLocalStore(generateTargetName, newCode);
     
     setStatus(`✅ AI処理完了！「${generateTargetName}」をローカル保管庫に保存しました。`, "status-ok");
@@ -780,7 +777,7 @@ document.getElementById('btnAiGenerate').addEventListener('click', async () => {
   .finally(() => { 
     btn.innerText = "✨ AIコード生成 (バックグラウンド)"; 
     btn.disabled = false; 
-    document.getElementById('aiPrompt').value = ''; // プロンプトをクリア
+    document.getElementById('aiPrompt').value = ''; 
   });
 });
 
