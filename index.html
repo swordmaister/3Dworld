@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <title>3D HTML Player & AI Editor v2.6</title>
+  <title>3D HTML Player & AI Editor v2.8</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
@@ -116,7 +116,7 @@
 
 <div id="header">
   <div class="header-left">
-    <h1>🎮 3D Viewer & AI Editor</h1>
+    <h1>🎮 3DViewer & AI Editor</h1>
     <button id="menuToggle">☰</button>
   </div>
   <div class="header-right">
@@ -238,6 +238,7 @@ const FOLDER_STORAGE_KEY = 'ai_editor_folders';
 const LAST_FOLDER_KEY = 'ai_editor_last_folder';
 
 let activeFile = null;
+let activeFileId = null; // ★ v2.8追加: 上書き保存をfileIdで確実に行うため
 let driveFiles = [];
 let currentIndex = -1;
 let isAutoPlay = false;
@@ -247,10 +248,7 @@ let activeIframeId = 'iframeA';
 let moveTimers = {};
 
 // =============================================
-//  フォルダ管理機能 (NEW)
-// =============================================
-// =============================================
-//  フォルダ管理機能 (NEW)
+//  フォルダ管理機能 (FIXED v2.7)
 // =============================================
 let savedFolders = JSON.parse(localStorage.getItem(FOLDER_STORAGE_KEY) || '[]');
 
@@ -265,26 +263,40 @@ else if (savedFolders.length === 0) {
   localStorage.setItem(FOLDER_STORAGE_KEY, JSON.stringify(savedFolders));
 }
 
-
-function renderFolderSelect() {
+// ★ FIX: 引数で選択フォルダを明示的に指定できるように改善
+function renderFolderSelect(selectFolderId = null) {
   const select = document.getElementById('targetFolderSelect');
   select.innerHTML = '';
   savedFolders.forEach(f => {
     select.add(new Option(f.name, f.id));
   });
   
-  // 前回選択していたフォルダを復元
-  const lastFolder = localStorage.getItem(LAST_FOLDER_KEY);
-  if(lastFolder !== null && savedFolders.find(f => f.id === lastFolder)) {
-    select.value = lastFolder;
+  // selectFolderId が明示的に指定されていればそれを選択
+  if (selectFolderId !== null) {
+    select.value = selectFolderId;
+    localStorage.setItem(LAST_FOLDER_KEY, selectFolderId);
+  } else {
+    // 前回選択していたフォルダを復元
+    const lastFolder = localStorage.getItem(LAST_FOLDER_KEY);
+    if(lastFolder !== null && savedFolders.find(f => f.id === lastFolder)) {
+      select.value = lastFolder;
+    } else if (savedFolders.length > 0) {
+      // フォルダが存在しない場合は最初のフォルダをデフォルト選択
+      select.value = savedFolders[0].id;
+      localStorage.setItem(LAST_FOLDER_KEY, savedFolders[0].id);
+    }
   }
 }
 
+// ★ FIX: セレクト変更を適切に同期
 document.getElementById('targetFolderSelect').addEventListener('change', (e) => {
-  localStorage.setItem(LAST_FOLDER_KEY, e.target.value);
+  const selectedId = e.target.value;
+  localStorage.setItem(LAST_FOLDER_KEY, selectedId);
+  setStatus(`フォルダを切り替えました: ${e.target.options[e.target.selectedIndex].text}`);
   fetchDriveFileList();
 });
 
+// ★ FIX: フォルダ追加時に新規IDを明示的に選択
 document.getElementById('btnAddFolder').addEventListener('click', () => {
   const name = prompt("フォルダの表示名を入力してください\n(例: プロジェクトA)");
   if (!name) return;
@@ -293,28 +305,37 @@ document.getElementById('btnAddFolder').addEventListener('click', () => {
   
   savedFolders.push({ name, id });
   localStorage.setItem(FOLDER_STORAGE_KEY, JSON.stringify(savedFolders));
-  renderFolderSelect();
-  document.getElementById('targetFolderSelect').value = id;
-  localStorage.setItem(LAST_FOLDER_KEY, id);
+  
+  // ★ 重要：新規追加したフォルダを選択状態で表示
+  renderFolderSelect(id);
+  
+  setStatus(`フォルダ「${name}」を追加しました`, "status-ok");
   fetchDriveFileList();
 });
 
+// ★ FIX: フォルダ削除時に次のフォルダを明示的に選択
 document.getElementById('btnDelFolder').addEventListener('click', () => {
   const select = document.getElementById('targetFolderSelect');
-  const id = select.value;
-  if(id === "") {
-    alert("デフォルトフォルダは削除できません。");
+  const currentId = select.value;
+  const currentName = select.options[select.selectedIndex].text;
+  
+  if(currentId === "" || savedFolders.length <= 1) {
+    alert("デフォルトフォルダまたは最後のフォルダは削除できません。");
     return;
   }
-  if(confirm("選択中のフォルダをリストから削除しますか？\n(Drive上の実際のフォルダは消えません)")) {
-    savedFolders = savedFolders.filter(f => f.id !== id);
+  
+  if(confirm(`「${currentName}」をリストから削除しますか？\n(Drive上の実際のフォルダは消えません)`)) {
+    savedFolders = savedFolders.filter(f => f.id !== currentId);
     localStorage.setItem(FOLDER_STORAGE_KEY, JSON.stringify(savedFolders));
-    renderFolderSelect();
-    localStorage.setItem(LAST_FOLDER_KEY, savedFolders[0].id);
+    
+    // ★ 重要：削除後、最初のフォルダを選択
+    const nextFolderId = savedFolders.length > 0 ? savedFolders[0].id : null;
+    renderFolderSelect(nextFolderId);
+    
+    setStatus(`「${currentName}」を削除しました`, "status-ok");
     fetchDriveFileList();
   }
 });
-
 
 // =============================================
 //  ユーティリティ
@@ -478,6 +499,7 @@ window.loadFromLocal = function(id) {
   if(!file) return;
   document.getElementById('codeEditor').value = file.content;
   activeFile = file.name;
+  activeFileId = null; // ★ v2.8: ローカルファイルはfileIdなし
   document.getElementById('currentFileLabel').textContent = `(ローカル) ${activeFile}`;
   document.getElementById('btnSaveDrive').disabled = true;
   updateCharCount();
@@ -570,6 +592,7 @@ async function playIndexFile(idx) {
       document.getElementById('driveFileSelect').value = idx; 
       
       activeFile = driveFiles[idx].name;
+      activeFileId = driveFiles[idx].id; // ★ v2.8追加: fileIdを保持
       document.getElementById('currentFileLabel').textContent = activeFile;
       document.getElementById('codeEditor').value = data.html;
       document.getElementById('btnSaveDrive').disabled = false;
@@ -601,7 +624,7 @@ document.getElementById('btnSaveDrive').addEventListener('click', async () => {
   try {
     const res = await fetch(GAS_URL, { 
       method: "POST", 
-      body: JSON.stringify({ action: "update", fileName: activeFile, content: code }) 
+      body: JSON.stringify({ action: "update", fileName: activeFile, fileId: activeFileId, content: code }) // ★ v2.8: fileId追加
     }); 
     const data = await res.json();
     if (data.success) setStatus(`「${activeFile}」を上書き保存しました`, "status-ok");
@@ -632,6 +655,7 @@ document.getElementById('btnSaveNewDrive').addEventListener('click', async () =>
     const data = await res.json();
     if (data.success) { 
       activeFile = saveName;
+      activeFileId = data.fileId; // ★ v2.8: 新規保存後のfileIdを保持
       document.getElementById('currentFileLabel').textContent = activeFile;
       document.getElementById('btnSaveDrive').disabled = false;
       document.getElementById('osd-filename').innerText = activeFile;
@@ -701,6 +725,7 @@ document.getElementById('btnClearCode').addEventListener('click', () => {
   if(confirm("エディタの内容をクリアして新規作成の準備をしますか？")) {
     document.getElementById('codeEditor').value = '<!DOCTYPE html>\n<html>\n<head>\n  <meta charset="UTF-8">\n</head>\n<body>\n\n</body>\n</html>';
     activeFile = null;
+    activeFileId = null; // ★ v2.8: クリア時にfileIdもリセット
     document.getElementById('currentFileLabel').textContent = "未保存の新規ファイル";
     document.getElementById('btnSaveDrive').disabled = true;
     updateCharCount(); renderToIframe(document.getElementById('codeEditor').value, "未保存ファイル");
